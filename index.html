@@ -1,92 +1,85 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#0a0d10"><title>Skim Cams</title>
-<meta name="description" content="Live Delaware coastal cams: Dewey Beach, Indian River Inlet, Bethany Beach.">
-<meta property="og:title" content="Skim Cams"><meta property="og:description" content="Live Delaware coastal cams: Dewey Beach, Indian River Inlet, Bethany Beach."><meta property="og:type" content="website">
-<script src="/vendor/hls.light.min.js" defer></script>
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Pirata+One&display=swap');
-:root{--bg:#0a0d10;--panel:#11161b;--panel2:#151b21;--line:#242c34;--text:#f3f5f7;--muted:#87929d;--accent:#dce5eb}
-*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif}
-body{min-height:100vh}main{width:min(1040px,100%);margin:auto;padding:42px 20px 64px}
-header{display:flex;align-items:end;justify-content:space-between;margin-bottom:20px}h1{font-family:'Pirata One',Georgia,serif;font-size:36px;letter-spacing:.5px;margin:0;font-weight:400}.status{font-size:12px;color:var(--muted)}
-.viewer{background:#000;border:1px solid var(--line);border-radius:14px;overflow:hidden}#media{aspect-ratio:16/9;background:#000;position:relative}iframe,video{display:block;width:100%;height:100%;border:0;background:#000}
-.meta{display:flex;align-items:center;justify-content:space-between;padding:15px 17px;background:var(--panel);border-top:1px solid var(--line);gap:16px}
-.camtitle{font-size:17px;font-weight:600;letter-spacing:-.2px}.camnote{font-size:12px;color:var(--muted);margin-top:3px}
-.direct{font-size:12px;color:var(--accent);text-decoration:none;border:1px solid var(--line);border-radius:8px;padding:8px 11px;white-space:nowrap}
-nav{display:flex;gap:8px;overflow-x:auto;padding:18px 0 2px;scrollbar-width:none}nav::-webkit-scrollbar{display:none}
-.spot{font-family:'Pirata One',Georgia,serif;letter-spacing:.25px;font-size:16px!important;appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--muted);border-radius:9px;padding:10px 14px;font:inherit;font-size:13px;font-weight:550;white-space:nowrap;cursor:pointer}
-.spot:hover{background:var(--panel2);color:var(--text)}.spot.active{background:var(--accent);border-color:var(--accent);color:#0a0d10}
-.angles{display:flex;gap:7px;margin-top:10px;min-height:34px}.angle{appearance:none;border:0;background:transparent;color:var(--muted);padding:7px 0;margin-right:14px;font:inherit;font-size:12px;cursor:pointer;border-bottom:1px solid transparent}
-.angle.active{color:var(--text);border-bottom-color:var(--text)}
-.help{margin-top:26px;padding-top:18px;border-top:1px solid var(--line);font-size:11px;color:#66717b;line-height:1.5}
+<meta name="theme-color" content="#0a0d10"><title>Pirate View — Delaware skim cams &amp; conditions</title>
+<meta name="description" content="Pirate View — Live Delaware skim cams, tides, wind and skimboarding conditions.">
+<meta property="og:title" content="Pirate View"><meta property="og:description" content="Pirate View — Live Delaware skim cams, tides, wind and skimboarding conditions."><meta property="og:type" content="website">
+<meta name="twitter:card" content="summary">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%23000'/%3E%3Cg stroke='%23fff' stroke-width='9' stroke-linecap='round'%3E%3Cline x1='16' y1='62' x2='84' y2='94'/%3E%3Cline x1='84' y1='62' x2='16' y2='94'/%3E%3C/g%3E%3Cpath fill='%23fff' d='M50 8c-19 0-32 13-32 30 0 10 5 17 11 21v10c0 3 2 5 5 5h32c3 0 5-2 5-5V59c6-4 11-11 11-21C82 21 69 8 50 8z'/%3E%3Ccircle cx='38' cy='40' r='8'/%3E%3Ccircle cx='62' cy='40' r='8'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://api.tidesandcurrents.noaa.gov" crossorigin>
+<link rel="preconnect" href="https://api.weather.gov" crossorigin>
+<link rel="preconnect" href="https://v.angelcam.com">
+<link rel="stylesheet" href="/css/app.css">
+<script type="module" src="/js/app.js"></script>
+</head>
+<body data-state="loading">
+<main>
+  <header class="top">
+    <h1>Pirate View</h1>
+    <button id="camOnlyBtn" class="pill" aria-pressed="false" title="Hide conditions and keep the camera running">Cam only</button>
+  </header>
 
-.pirate-cover{position:absolute;left:10px;bottom:10px;z-index:20;width:215px;height:58px;
-display:none;align-items:center;justify-content:center;pointer-events:none;
-filter:drop-shadow(0 2px 5px rgba(0,0,0,.5));overflow:hidden;border-radius:5px}
-.pirate-cover svg{width:100%;height:100%;display:block}
-@media(max-width:650px){main{padding:24px 14px 48px}header{margin-bottom:14px}h1{font-size:32px}.status{display:none}.viewer{border-radius:10px}.meta{padding:12px 13px}.camtitle{font-size:15px}}
-</style></head>
-<body><main>
-<header><h1>Skim Cams</h1><div class="status">Verified coastal cameras</div></header>
-<div class="viewer">
-  <div id="media"></div>
-  <div class="meta">
-    <div><div class="camtitle" id="camtitle"></div><div class="camnote" id="camnote"></div></div>
-    <a class="direct" id="direct" target="_blank" rel="noopener">Open source</a>
-  </div>
-</div>
-<nav id="spots"></nav><div class="angles" id="angles"></div>
-<div class="help">Only working, useful views are shown. Inlet cameras may rotate. DelDOT feeds may need a tap on Play. New spots are added only after the live player is verified.</div>
-</main>
-<script>
-const cams=[{"spot": "Dewey", "name": "Dewey Beach", "kind": "iframe", "src": "https://v.angelcam.com/iframe?autoplay=1&v=27r3vv4pyx", "note": "Oceanfront"}, {"spot": "Indian River", "name": "Inlet North", "kind": "hls", "src": "https://video.deldot.gov/live/SCAM098.stream/playlist.m3u8", "note": "North side"}, {"spot": "Indian River", "name": "Inlet Overview", "kind": "hls", "src": "https://video.deldot.gov/live/SCAM169.stream/playlist.m3u8", "note": "South pylon"}, {"spot": "Bethany", "name": "Bethany Ocean", "kind": "iframe", "src": "https://v.angelcam.com/iframe?autoplay=1&v=boykze68y8", "note": "East / ocean"}, {"spot": "Bethany", "name": "Bethany North", "kind": "iframe", "src": "https://v.angelcam.com/iframe?autoplay=1&v=v8yp6jmpr6", "note": "North view"}, {"spot": "Bethany", "name": "Bethany South", "kind": "iframe", "src": "https://v.angelcam.com/iframe?autoplay=1&v=ger25k77rm", "note": "South view"}];
-const media=document.querySelector('#media'), title=document.querySelector('#camtitle'), note=document.querySelector('#camnote'), direct=document.querySelector('#direct'), spots=document.querySelector('#spots'), angles=document.querySelector('#angles');
-const groups=[...new Set(cams.map(c=>c.spot))];
-let current=0;
+  <nav id="spots" class="spots" aria-label="Skim spots"></nav>
+  <div id="bestNow" class="bestnow" hidden></div>
 
-let hls=null;
-function renderMedia(c){
- if(hls){hls.destroy();hls=null;}
- media.innerHTML='';
- let e;
- if(c.kind==='hls'){
-   e=document.createElement('video'); e.controls=true; e.autoplay=true; e.muted=true; e.playsInline=true;
-   if(window.Hls && Hls.isSupported()){ hls=new Hls({liveDurationInfinity:true}); hls.loadSource(c.src); hls.attachMedia(e); } else { e.src=c.src; }
- } else {
-   e=document.createElement('iframe'); e.src=c.src; e.allow='autoplay; fullscreen; picture-in-picture'; e.allowFullscreen=true;
- }
- media.appendChild(e);
- if(c.kind==='iframe'){
-   const flag=document.createElement('div');
-   flag.className='pirate-cover';
-   flag.style.display='flex';
-   flag.innerHTML=`<div style="width:215px;height:58px;background:#090a0b;border:1px solid #34383c;border-radius:4px;display:flex;align-items:center;padding:4px 10px;gap:10px;overflow:hidden">
-      <div style="width:47px;height:47px;border-radius:2px;overflow:hidden;background:white;flex:0 0 47px">
-        <svg viewBox="0 0 100 100" width="100%" height="100%" aria-hidden="true" style="display:block"><rect width="100" height="100" fill="#000"/><g stroke="#fff" stroke-width="9" stroke-linecap="round"><line x1="16" y1="62" x2="84" y2="94"/><line x1="84" y1="62" x2="16" y2="94"/></g><path fill="#fff" d="M50 8c-19 0-32 13-32 30 0 10 5 17 11 21v10c0 3 2 5 5 5h32c3 0 5-2 5-5V59c6-4 11-11 11-21C82 21 69 8 50 8z"/><circle cx="38" cy="40" r="8" fill="#000"/><circle cx="62" cy="40" r="8" fill="#000"/><path d="M50 50l-5 9h10z" fill="#000"/><g stroke="#000" stroke-width="2.5"><line x1="42" y1="66" x2="42" y2="74"/><line x1="50" y1="66" x2="50" y2="74"/><line x1="58" y1="66" x2="58" y2="74"/></g></svg>
+  <div class="layout">
+    <section class="camcol">
+      <div class="viewer">
+        <div id="media"></div>
+        <div class="meta">
+          <div><div class="camtitle" id="camtitle"></div><div class="camnote" id="camnote"></div></div>
+          <a class="direct" id="direct" target="_blank" rel="noopener">Open source</a>
+        </div>
       </div>
-      <span style="font-family:'Pirata One',Georgia,serif;color:#f4f1e8;font-size:22px;letter-spacing:.8px;white-space:nowrap">PIRATE VIEW</span>
-    </div>`;
-   media.appendChild(flag);
- }
- title.textContent=c.name; note.textContent=c.note; direct.href=c.src;
-}
-function choose(i){
- current=i; const c=cams[i]; renderMedia(c); renderSpots(c.spot); renderAngles(c.spot,i);
- history.replaceState(null,'','#'+encodeURIComponent(c.name.toLowerCase().replaceAll(' ','-')));
-}
-function renderSpots(active){
- spots.innerHTML='';
- groups.forEach(g=>{let b=document.createElement('button'); b.className='spot'+(g===active?' active':''); b.textContent=g;
- b.onclick=()=>choose(cams.findIndex(c=>c.spot===g)); spots.appendChild(b);});
-}
-function renderAngles(group,activeIndex){
- angles.innerHTML=''; const arr=cams.map((c,i)=>[c,i]).filter(([c])=>c.spot===group);
- if(arr.length<2)return;
- arr.forEach(([c,i])=>{let b=document.createElement('button'); b.className='angle'+(i===activeIndex?' active':''); b.textContent=c.name.replace(group,'').replace('Bethany ','').replace('Inlet ','').trim()||c.note; b.onclick=()=>choose(i); angles.appendChild(b);});
-}
-const hash=decodeURIComponent(location.hash.slice(1));
-const initial=hash?cams.findIndex(c=>c.name.toLowerCase().replaceAll(' ','-')===hash):-1;
-document.addEventListener('DOMContentLoaded',()=>choose(initial>=0?initial:0));
-</script></body></html>
+      <div class="angles" id="angles"></div>
+    </section>
+
+    <section class="rail">
+      <div class="spothead"><h2 id="spotName"></h2><button id="favBtn" class="fav" aria-pressed="false">☆ Favorite</button></div>
+      <div class="decision">
+        <div id="score" class="score"><p class="na loading">Loading conditions…</p></div>
+        <div id="window" class="window" hidden></div>
+      </div>
+      <div id="strip" class="strip"></div>
+    </section>
+  </div>
+
+  <section class="panel tidepanel">
+    <h3>Tide</h3>
+    <div id="tideSummary" class="tidesum"></div>
+    <div id="tideGraph" class="tidegraph-wrap"></div>
+  </section>
+
+  <section class="panel" id="hourlyPanel">
+    <h3>Hourly skim forecast</h3>
+    <div id="hourly" class="hourly"></div>
+    <p class="legend"><span class="sw best"></span>Best window <span class="sw night"></span>After dark</p>
+  </section>
+
+  <section class="panel">
+    <h3>Conditions detail</h3>
+    <div id="details" class="details"></div>
+    <p id="sourceNote" class="fine"></p>
+  </section>
+
+  <section class="soon" aria-label="Skim spots coming soon">
+    <div class="soonhead"><h3>Skim spots</h3><span class="badge">Coming soon</span></div>
+    <p>Local spot intelligence built specifically for Delaware skimboarding.</p>
+    <div class="sooncards">
+      <div class="card" aria-disabled="true"><span>Dewey</span><small>Coming soon</small></div>
+      <div class="card" aria-disabled="true"><span>Bethany</span><small>Coming soon</small></div>
+      <div class="card" aria-disabled="true"><span>Southside</span><small>Coming soon</small></div>
+      <div class="card" aria-disabled="true"><span>Northside</span><small>Coming soon</small></div>
+      <div class="card" aria-disabled="true"><span>Conquest</span><small>Coming soon</small></div>
+    </div>
+  </section>
+
+  <footer class="help">
+    Live cams: Angelcam and DelDOT. Tides: NOAA CO-OPS predictions. Wind &amp; temps: NOAA CO-OPS observations and National Weather Service forecasts.
+    Waves &amp; water: NOAA NDBC buoy 44084 (Bethany Beach). The Skim Score is a Pirate View estimate, not an official forecast — always check the beach yourself.
+    Inlet cameras may rotate. DelDOT feeds may need a tap on Play.
+  </footer>
+</main>
+
+<div class="camonly-bar"><span id="camOnlyName"></span><button id="exitCamOnly" class="pill">Exit cam only</button></div>
+</body></html>

@@ -1,16 +1,34 @@
-# Pirate Cam (Skim Cams)
+# Pirate View
 
-Static single-page viewer for Delaware coastal cameras (Dewey, Indian River Inlet, Bethany).
+Live Delaware skim cams + skimboarding conditions. Plain HTML/CSS/ES modules, no build step,
+one Vercel serverless function.
 
-- `index.html` — the app (from `Skim_Cams_Pirate_View_v1_1.html`, with sharing fixes below)
-- `vendor/hls.light.min.js` — hls.js 1.7.4 (Apache-2.0) so the DelDOT Inlet streams play in every browser
-- `vercel.json` — tells Vercel to serve it as a static site with no build step
+## Layout
+| Path | What |
+|---|---|
+| `index.html`, `css/app.css` | Page and styles |
+| `js/config/cameras.js` | The six verified live cams (unchanged from the original app) |
+| `js/config/spots.js` | Skim spots, NOAA stations and **tunable skim profiles** |
+| `js/data/` | Fetching (timeouts, caching) and NOAA normalisation |
+| `js/engine/` | Tide curve, sunrise/sunset, Skim Score, best window, timeline |
+| `js/ui/` | Camera player, tide graph, conditions rendering |
+| `api/buoy.js` | Proxies NDBC buoy 44084 (NDBC has no CORS) |
+| `vendor/hls.light.min.js` | hls.js 1.7.4 (Apache-2.0) for the DelDOT inlet streams |
+| `tests/` | `npm test` — engine + buoy parser tests (not deployed) |
 
-Pushing to `main` auto-deploys to Vercel production.
+## Data
+- Tides: NOAA CO-OPS hi/lo predictions (Rehoboth Beach 8557863; Indian River Inlet 8558690)
+- Observed wind/air/water: NOAA CO-OPS Lewes 8557380, Ocean City Inlet 8570283
+- Forecast wind, gusts, rain, thunder, wave height: NWS gridpoints
+- Waves, period, direction, water temp: NDBC 44084 Bethany Beach
 
-## Changes from the original file
-- Inlet (DelDOT) streams play in Chrome/Firefox/Android via bundled hls.js, not just Safari
-- Hotlinked stock skull image replaced with an inline SVG drawn for this project
-- PIRATE VIEW badge moved to bottom-left so camera providers' logos stay visible
-- Link-preview meta tags (description / og:title)
-- All 6 cameras verified live on 2026-11-21; none removed
+Missing data is skipped, never filled in. Each value is labelled Observed / Forecast / Estimate.
+
+## Tuning the Skim Score
+Edit `profile` per spot in `js/config/spots.js`. Profiles for Dewey, Bethany, Southside and
+Northside are starting estimates. **Conquest Road Beach** is intentionally unconfigured
+(all `null`) — it shows live conditions but no score until its profile is filled in.
+
+## Links
+`#dewey #bethany #southside #northside #conquest`, plus the original camera links
+`#dewey-beach #inlet-north #inlet-overview #bethany-ocean #bethany-north #bethany-south`.
