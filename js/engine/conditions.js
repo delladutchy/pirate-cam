@@ -69,9 +69,13 @@ export function buildConditions(spot, data, now = new Date()) {
     timeline.push({ ...s, ...pickScore(scoreSample(spot.profile, s)) });
   }
 
-  // Hourly cells: "now" + the next 12 whole hours.
+  // Hourly cells: "now" + the next daylight hours (night skipped), up to 12.
+  const etDay = d => d.toLocaleDateString('en-US', { timeZone: 'America/New_York' });
   const hourly = [timeline[0]];
-  for (const s of timeline.slice(1)) if (s.t.getMinutes() === 0 && hourly.length < 13) hourly.push(s);
+  for (const s of timeline.slice(1)) {
+    if (s.t.getMinutes() !== 0 || !s.daylight || hourly.length >= 13) continue;
+    hourly.push({ ...s, newDay: etDay(s.t) !== etDay(hourly[hourly.length - 1].t) });
+  }
 
   const window = nowScore.score == null ? { state: 'unknown' } : bestWindow(timeline);
   return {

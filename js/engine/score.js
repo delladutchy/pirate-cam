@@ -99,6 +99,8 @@ export function scoreSample(profile, s) {
   if (factors.length < 2) return { score: null, reason: 'insufficient-data' };
   const wsum = factors.reduce((a, f) => a + w[f.key], 0);
   let score = 10 * factors.reduce((a, f) => a + f.q * w[f.key], 0) / wsum;
+  // One bad factor (e.g. strong onshore wind) should limit the session, not be averaged away.
+  score *= 0.6 + 0.4 * Math.min(...factors.map(f => f.q));
 
   const extra = [];
   if (Number.isFinite(s.pop) && s.pop >= 70) { score -= 1.5; extra.push(['-', 'Rain likely', 1]); }

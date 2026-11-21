@@ -69,8 +69,8 @@ export function renderHourly(el, cond) {
     const wind = s.wind ? `<span class="arrow" style="transform:rotate(${(s.wind.fromDeg ?? 0) + 180}deg)">↑</span>${Math.round(s.wind.mph)}` : '–';
     const tide = s.tide ? (s.tide.rising ? '↗' : '↘') : '';
     const bar = sc == null ? 0 : Math.max(4, sc * 10);
-    return `<div class="hr ${inWin(s.t, i) ? 'best' : ''} ${s.daylight ? '' : 'night'} ${sc == null ? '' : 'tone-' + s.tone}">
-      <div class="t">${i === 0 ? 'Now' : hour(s.t)}</div>
+    return `<div class="hr ${inWin(s.t, i) ? 'best' : ''} ${s.newDay ? 'newday' : ''} ${s.daylight ? '' : 'night'} ${sc == null ? '' : 'tone-' + s.tone}">
+      <div class="t">${i === 0 ? 'Now' : (s.newDay ? '<b>Tmrw</b> ' : '') + hour(s.t)}</div>
       <div class="n">${sc == null ? '–' : sc.toFixed(1)}</div>
       <div class="bar"><i style="height:${bar}%"></i></div>
       <div class="w" title="Wind mph">${wind}</div>
