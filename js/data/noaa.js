@@ -74,8 +74,8 @@ export async function nwsForecast(lat, lon) {
       const P = j.properties;
       return {
         updated: P.updateTime,
-        windMph: series(P.windSpeed, v => v * KMH_TO_MPH),
-        gustMph: series(P.windGust, v => v * KMH_TO_MPH),
+        windMph: series(P.windSpeed, v => Math.max(0, v * KMH_TO_MPH)),
+        gustMph: series(P.windGust, v => Math.max(0, v * KMH_TO_MPH)),
         windFromDeg: series(P.windDirection),
         pop: series(P.probabilityOfPrecipitation),
         thunder: series(P.probabilityOfThunder),
