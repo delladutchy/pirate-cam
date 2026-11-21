@@ -121,26 +121,40 @@ export function scoreSample(profile, s) {
 
 /**
  * samples: [{ t: Date, score, daylight }] in time order, first = now.
- * Finds the best daylight stretch in the period and says go / wait / none.
+ * Always returns the strongest upcoming daylight opportunity, with its real
+ * rating — a POOR best window is still shown, labelled as POOR.
+ *  - Prefers the SOONEST stretch close to the best of the period, so
+ *    "this afternoon" beats "slightly better tomorrow".
+ *  - state: 'now' (window includes now) | 'next' | 'unknown' (no daylight scores)
  */
 export function bestWindow(samples) {
   const ok = x => x.daylight && x.score != null;
   const day = samples.filter(ok);
   if (!day.length) return { state: 'unknown' };
   const best = day.reduce((a, b) => (b.score > a.score ? b : a));
-  if (best.score < 5) return { state: 'none', bestScore: best.score, bestT: best.t };
-  // Prefer the SOONEST stretch that is close to the best of the next 24 h,
-  // so "this afternoon" wins over "slightly better tomorrow".
-  const thr = Math.max(5, best.score - 1);
-  const a = samples.findIndex(x => ok(x) && x.score >= thr);
+  const thr = best.score - 1;
+  // first daylight stretch reaching within 1 point of the best
+  let a = samples.findIndex(x => ok(x) && x.score >= thr);
   let b = a;
   while (b < samples.length - 1 && ok(samples[b + 1]) && samples[b + 1].score >= thr) b++;
-  const run = samples.slice(a, b + 1);
-  const peak = run.reduce((p, x) => (x.score > p.score ? x : p));
+  const peak = samples.slice(a, b + 1).reduce((p, x) => (x.score > p.score ? x : p));
+  // tighten the window around its peak
+  const near = peak.score - 0.7;
+  const pi = samples.indexOf(peak);
+  a = pi; b = pi;
+  while (a > 0 && ok(samples[a - 1]) && samples[a - 1].score >= near) a--;
+  while (b < samples.length - 1 && ok(samples[b + 1]) && samples[b + 1].score >= near) b++;
   // samples[0] is 'now' (irregular); the rest are evenly spaced
   const step = samples.length > 2 ? samples[2].t - samples[1].t : 15 * 60e3;
   const start = samples[a].t, end = new Date(samples[b].t.getTime() + step);
-  return { state: a === 0 ? 'go' : 'wait', start, end, bestScore: peak.score, bestT: peak.t, minutesUntil: Math.round((start - samples[0].t) / 60000) };
+  const L = labelFor(peak.score);
+  const nowScore = samples[0].score;
+  return {
+    state: a === 0 ? 'now' : 'next', start, end,
+    bestScore: peak.score, bestT: peak.t, label: L.label, tone: L.tone, peak,
+    trend: nowScore == null || a === 0 ? null : peak.score > nowScore + 0.2 ? 'up' : peak.score < nowScore - 0.2 ? 'down' : 'flat',
+    minutesUntil: Math.round((start - samples[0].t) / 60000),
+  };
 }
 
 /** Compact, UI-agnostic summary — the shape future notifications will use. */
@@ -149,7 +163,7 @@ export function buildSummary(spot, now, window) {
   return {
     spotId: spot.id, name: spot.fullName, score: now.score, label: now.label,
     reasons: now.reasons.filter(r => r.sign === '+').map(r => r.text),
-    window: window && window.start ? { start: window.start, end: window.end, state: window.state } : null,
+    window: window && window.start ? { start: window.start, end: window.end, state: window.state, score: window.bestScore, label: window.label } : null,
     headline: now.score >= 9 ? `${spot.name.toUpperCase()} IS ON` : `${spot.name} ${now.score.toFixed(1)} ${now.label}`,
   };
 }

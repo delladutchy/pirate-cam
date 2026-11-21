@@ -54,14 +54,22 @@ test('jetty shelter neutralises southerly onshore at Northside', () => {
 });
 test('labels', () => { assert.equal(labelFor(8.6).label, 'VERY GOOD'); assert.equal(labelFor(4.9).label, 'POOR'); assert.equal(labelFor(9).label, 'FIRING'); });
 
-test('best window: wait then go', () => {
+test('best window: next, then now; poor periods still return the best stretch', () => {
   const t0 = new Date('2026-11-21T17:00Z').getTime(), q = 15 * 60e3;
   const scores = [5.5, 5.6, 6, 7, 8.4, 8.6, 8.2, 7.4, 6];
   const S = scores.map((score, i) => ({ t: new Date(t0 + i * q), score, daylight: true }));
-  const w = bestWindow(S); assert.equal(w.state, 'wait'); assert.equal(w.bestScore, 8.6);
+  const w = bestWindow(S); assert.equal(w.state, 'next'); assert.equal(w.bestScore, 8.6); assert.equal(w.label, 'VERY GOOD'); assert.equal(w.trend, 'up');
   assert.equal(w.start.getTime(), t0 + 4 * q); assert.equal(w.end.getTime(), t0 + 7 * q);
-  assert.equal(bestWindow(S.slice(4)).state, 'go');
-  assert.equal(bestWindow(S.map(x => ({ ...x, score: 3 }))).state, 'none');
+  assert.equal(bestWindow(S.slice(4)).state, 'now');
+  const poor = bestWindow(S.map((x, i) => ({ ...x, score: [2, 2.5, 3.1, 4.8, 4.5, 3, 2, 2, 2][i] })));
+  assert.equal(poor.state, 'next'); assert.equal(poor.bestScore, 4.8); assert.equal(poor.label, 'POOR'); assert.equal(poor.start.getTime(), t0 + 3 * q);
+  assert.equal(bestWindow(S.map(x => ({ ...x, daylight: false }))).state, 'unknown');
+});
+
+test('best window prefers a strong window today over a slightly better one tomorrow', () => {
+  const t0 = new Date('2026-11-21T17:00Z').getTime(), q = 15 * 60e3;
+  const S = [6, 7.6, 7.6, 5, 2, 2, 8.3, 8.3, 6].map((score, i) => ({ t: new Date(t0 + i * q), score, daylight: ![4, 5].includes(i) }));
+  const w = bestWindow(S); assert.equal(w.start.getTime(), t0 + q); assert.equal(w.bestScore, 7.6);
 });
 
 test('direct links: spot ids and original camera slugs', () => {
@@ -72,10 +80,4 @@ test('direct links: spot ids and original camera slugs', () => {
   assert.deepEqual(resolveHash('#bethany-south', slugs), { spotId: 'bethany', cam: 'bethany-south' });
   assert.deepEqual(resolveHash('#conquest', slugs), { spotId: 'conquest', cam: 'dewey-beach' });
   assert.equal(resolveHash('#nope', slugs), null);
-});
-
-test('best window prefers a strong window today over a slightly better one tomorrow', () => {
-  const t0 = new Date('2026-11-21T17:00Z').getTime(), q = 15 * 60e3;
-  const S = [6, 7.6, 7.6, 5, 2, 2, 8.3, 8.3, 6].map((score, i) => ({ t: new Date(t0 + i * q), score, daylight: ![4, 5].includes(i) }));
-  const w = bestWindow(S); assert.equal(w.start.getTime(), t0 + q); assert.equal(w.bestScore, 7.6);
 });

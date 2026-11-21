@@ -11,7 +11,8 @@ one Vercel serverless function.
 | `js/config/spots.js` | Skim spots, NOAA stations and **tunable skim profiles** |
 | `js/data/` | Fetching (timeouts, caching) and NOAA normalisation |
 | `js/engine/` | Tide curve, sunrise/sunset, Skim Score, best window, timeline |
-| `js/ui/` | Camera player, tide graph, conditions rendering |
+| `js/ui/` | Camera player + bug, PirateCast timeline, interactive tide graph, score/window cards, motion helpers |
+| `js/map/model.js` | Map data model (markers + wind vectors per forecast time) — see `docs/MAP.md` |
 | `api/buoy.js` | Proxies NDBC buoy 44084 (NDBC has no CORS) |
 | `vendor/hls.light.min.js` | hls.js 1.7.4 (Apache-2.0) for the DelDOT inlet streams |
 | `tests/` | `npm test` — engine + buoy parser tests (not deployed) |
@@ -28,6 +29,11 @@ Missing data is skipped, never filled in. Each value is labelled Observed / Fore
 Edit `profile` per spot in `js/config/spots.js`. Profiles for Dewey, Bethany, Southside and
 Northside are starting estimates. **Conquest Road Beach** is intentionally unconfigured
 (all `null`) — it shows live conditions but no score until its profile is filled in.
+
+## Interaction
+One selected forecast time drives everything: tap an hour in **PirateCast** (or drag with a mouse, or use ← →),
+tap the tide graph, or tap the Best Window card. The score card, wind arrow, tide playhead and readout follow it.
+Motion is limited to value changes and respects `prefers-reduced-motion`.
 
 ## Links
 `#dewey #bethany #southside #northside #conquest`, plus the original camera links

@@ -36,48 +36,33 @@
 
     <section class="rail">
       <div class="spothead"><h2 id="spotName"></h2><button id="favBtn" class="fav" aria-pressed="false">☆ Favorite</button></div>
-      <div class="decision">
-        <div id="score" class="score"><p class="na loading">Loading conditions…</p></div>
-        <div id="window" class="window" hidden></div>
-      </div>
-      <div id="strip" class="strip"></div>
+      <div id="score" class="score" aria-live="polite"><p class="na loading">Loading conditions…</p></div>
+      <div id="window" class="window" hidden role="button" tabindex="0"></div>
     </section>
   </div>
 
-  <section class="panel tidepanel">
+  <section class="panel forecast" id="piratecastPanel" aria-label="PirateCast forecast">
+    <div class="pchead"><h3>PirateCast</h3><p id="pcReadout" class="pcreadout" aria-live="polite"></p></div>
+    <div id="piratecast" class="piratecast" role="group" aria-label="Hourly Pirate Score — tap an hour"></div>
+    <p class="legend"><span class="sw best"></span>Best window <span class="sw night"></span>After dark</p>
+  </section>
+
+  <section class="panel tidepanel" aria-label="Tide">
     <h3>Tide</h3>
     <div id="tideSummary" class="tidesum"></div>
     <div id="tideGraph" class="tidegraph-wrap"></div>
+    <p class="legend"><span class="sw best"></span>Best window <span class="sw night"></span>Night <span class="sw now"></span>Now <span class="sw ph"></span>Selected time · tap the graph to pick a time</p>
   </section>
 
-  <section class="panel" id="hourlyPanel">
-    <h3>Hourly skim forecast</h3>
-    <div id="hourly" class="hourly"></div>
-    <p class="legend"><span class="sw best"></span>Best window · daylight hours only</p>
-  </section>
-
-  <section class="panel">
+  <section class="panel detailpanel">
     <h3>Conditions detail</h3>
     <div id="details" class="details"></div>
     <p id="sourceNote" class="fine"></p>
   </section>
 
-  <section class="soon" aria-label="Skim spots coming soon">
-    <div class="soonhead"><h3>Skim spots</h3><span class="badge">Coming soon</span></div>
-    <p>Local spot intelligence built specifically for Delaware skimboarding.</p>
-    <div class="sooncards">
-      <div class="card" aria-disabled="true"><span>Dewey</span><small>Coming soon</small></div>
-      <div class="card" aria-disabled="true"><span>Bethany</span><small>Coming soon</small></div>
-      <div class="card" aria-disabled="true"><span>Southside</span><small>Coming soon</small></div>
-      <div class="card" aria-disabled="true"><span>Northside</span><small>Coming soon</small></div>
-      <div class="card" aria-disabled="true"><span>Conquest</span><small>Coming soon</small></div>
-    </div>
-  </section>
-
   <footer class="help">
-    Live cams: Angelcam and DelDOT. Tides: NOAA CO-OPS predictions. Wind &amp; temps: NOAA CO-OPS observations and National Weather Service forecasts.
-    Waves &amp; water: NOAA NDBC buoy 44084 (Bethany Beach). The Skim Score is a Pirate View estimate, not an official forecast — always check the beach yourself.
-    Inlet cameras may rotate. DelDOT feeds may need a tap on Play.
+    Cams: Angelcam, DelDOT · Tides: NOAA CO-OPS · Wind &amp; temps: NOAA CO-OPS, National Weather Service · Waves &amp; water: NOAA NDBC 44084 ·
+    Pirate Score is a Pirate View estimate, not an official forecast — check the beach yourself.
   </footer>
 </main>
 

@@ -18,7 +18,7 @@ export function shorebreakEnergy(ft, periodS) {
 
 export function buildConditions(spot, data, now = new Date()) {
   const tide = data.tideEvents ? makeTide(data.tideEvents) : null;
-  const from = new Date(now.getTime() - 6 * HOUR), to = new Date(now.getTime() + 24 * HOUR);
+  const from = new Date(now.getTime() - 6 * HOUR), to = new Date(now.getTime() + 48 * HOUR);
   const daylight = daylightRanges(from, to, spot.lat, spot.lon);
   const grid = data.grid;
   const g = t => (grid ? grid.at(t) : {});
@@ -55,7 +55,7 @@ export function buildConditions(spot, data, now = new Date()) {
   };
   const nowScore = scoreSample(spot.profile, nowSample);
 
-  // ---- timeline: 15-minute steps for 24 h. Future steps use forecasts only. ----
+  // ---- timeline: 15-minute steps for 48 h. Future steps use forecasts only. ----
   const timeline = [{ ...nowSample, ...pickScore(nowScore) }];
   const start = Math.ceil(now.getTime() / (15 * MIN)) * 15 * MIN;
   for (let ms = start; ms <= to.getTime(); ms += 15 * MIN) {
@@ -69,11 +69,11 @@ export function buildConditions(spot, data, now = new Date()) {
     timeline.push({ ...s, ...pickScore(scoreSample(spot.profile, s)) });
   }
 
-  // Hourly cells: "now" + the next daylight hours (night skipped), up to 12.
+  // PirateCast cells: "now" + every whole hour for the next 36 h (night included, dimmed in the UI).
   const etDay = d => d.toLocaleDateString('en-US', { timeZone: 'America/New_York' });
   const hourly = [timeline[0]];
   for (const s of timeline.slice(1)) {
-    if (s.t.getMinutes() !== 0 || !s.daylight || hourly.length >= 13) continue;
+    if (s.t.getMinutes() !== 0 || s.t - now > 36 * HOUR) continue;
     hourly.push({ ...s, newDay: etDay(s.t) !== etDay(hourly[hourly.length - 1].t) });
   }
 
@@ -85,4 +85,4 @@ export function buildConditions(spot, data, now = new Date()) {
   };
 }
 
-function pickScore(r) { return { score: r.score, label: r.label, tone: r.tone }; }
+function pickScore(r) { return { score: r.score, label: r.label, tone: r.tone, reasons: r.reasons || [], reason: r.reason }; }

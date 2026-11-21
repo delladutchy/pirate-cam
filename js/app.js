@@ -1,12 +1,16 @@
-// Pirate View — wiring: routing, spot/camera switching, data refresh, rendering.
+// Pirate View — wiring: routing, spot/camera switching, data refresh, and the
+// single "selected forecast time" that PirateCast, the score card and the tide
+// graph all share.
 import { cams, camSlug } from './config/cameras.js';
 import { spots, spotById, resolveHash } from './config/spots.js';
 import { loadSpotData } from './data/load.js';
 import { buildConditions } from './engine/conditions.js';
 import { renderMedia } from './ui/camera.js';
-import { renderTideGraph } from './ui/tidegraph.js';
-import { renderScore, renderWindow, renderStrip, renderTideSummary, renderHourly, renderDetails } from './ui/conditions.js';
+import { createTideGraph } from './ui/tidegraph.js';
+import { createPirateCast } from './ui/piratecast.js';
+import { mountScore, updateScore, renderWindow, renderTideSummary, renderDetails, facts, whenLabel } from './ui/conditions.js';
 import { esc } from './ui/format.js';
+import { reducedMotion } from './ui/motion.js';
 import { prefs } from './prefs.js';
 
 const $ = s => document.querySelector(s);
@@ -14,7 +18,8 @@ const camBySlug = Object.fromEntries(cams.map(c => [camSlug(c), c]));
 const slugs = Object.keys(camBySlug);
 const REFRESH_MS = 10 * 60e3;
 
-const state = { spotId: null, cam: null, results: {} }; // results[spotId] = conditions | 'error'
+// selT: the selected forecast time (Date), or null for "now".
+const state = { spotId: null, cam: null, results: {}, selT: null }; // results[spotId] = conditions | 'error'
 
 // ---------- routing ----------
 function initialRoute() {
@@ -29,12 +34,11 @@ function select(spotId, cam) {
   cam = camChoices.includes(cam) ? cam : camChoices[0];
   const spotChanged = spotId !== state.spotId, camChanged = cam !== state.cam;
   state.spotId = spotId; state.cam = cam;
-  const hash = '#' + (cam === spot.cams[0] || !spot.cams.length ? spot.id : cam);
-  history.replaceState(null, '', hash);
+  history.replaceState(null, '', '#' + (cam === spot.cams[0] || !spot.cams.length ? spot.id : cam));
   if (camChanged) showCamera();
   renderSpotNav();
   renderAngles();
-  if (spotChanged) { renderConditions(); ensureLoaded(spotId); }
+  if (spotChanged) { renderConditions(true); ensureLoaded(spotId); }
 }
 
 window.addEventListener('hashchange', () => { const r = resolveHash(location.hash, slugs); if (r) select(r.spotId, r.cam); });
@@ -46,7 +50,7 @@ function showCamera() {
   if (!c) { media.innerHTML = '<div class="cam-fail"><p>Live camera temporarily unavailable</p></div>'; return; }
   renderMedia(media, c);
   const nearby = !spot.cams.length;
-  $('#camtitle').textContent = nearby ? `${spot.fullName}` : c.name;
+  $('#camtitle').textContent = nearby ? spot.fullName : c.name;
   $('#camnote').textContent = nearby ? `No camera here yet · nearest live cam: ${c.name}` : c.note;
   $('#direct').href = c.src;
   $('#camOnlyName').textContent = c.name;
@@ -57,10 +61,7 @@ function renderAngles() {
   const list = spot.cams.length ? spot.cams : spot.nearbyCams || [];
   const el = $('#angles');
   if (list.length < 2) { el.innerHTML = ''; return; }
-  const label = slug => {
-    const n = camBySlug[slug].name;
-    return spot.cams.length ? n.replace(/^(Bethany|Inlet) /, '') : n;
-  };
+  const label = slug => { const n = camBySlug[slug].name; return spot.cams.length ? n.replace(/^(Bethany|Inlet) /, '') : n; };
   el.innerHTML = list.map(s => `<button class="angle ${s === state.cam ? 'active' : ''}" data-cam="${s}">${esc(label(s))}</button>`).join('');
 }
 $('#angles').addEventListener('click', e => { const b = e.target.closest('[data-cam]'); if (b) select(state.spotId, b.dataset.cam); });
@@ -100,37 +101,60 @@ async function ensureLoaded(spotId, force = false) {
   if (spotId === state.spotId) renderConditions();
 }
 
-function renderConditions() {
+const tideGraph = createTideGraph($('#tideGraph'), { onPick: t => pirateCast.selectTime(t) });
+const pirateCast = createPirateCast($('#piratecast'), { onSelect: s => applySelection(s) });
+
+function current() { const r = state.results[state.spotId]; return r && r !== 'error' ? r : null; }
+
+function applySelection(s) {
+  const r = current(); if (!r || !s) return;
+  const isNow = s === r.timeline[0];
+  state.selT = isNow ? null : s.t;
+  updateScore($('#score'), r, s, { onBackToNow: () => pirateCast.select(0) });
+  renderTideSummary($('#tideSummary'), r, s);
+  tideGraph.render(r, s.t);
+  const f = facts(s);
+  $('#pcReadout').innerHTML = `<b>${whenLabel(s, r)}</b>${s.score != null ? ` · <span class="tone-${s.tone}"><span class="lbl"><i></i>${s.score.toFixed(1)} ${s.label}</span></span>` : ''}${['waves', 'wind', 'tide'].filter(k => f[k]).map(k => ` · ${k[0].toUpperCase() + k.slice(1)} ${f[k]}`).join('')}${s.daylight ? '' : ' · <span class="muted">after dark</span>'}`;
+}
+
+function fadeIn(...els) {
+  if (reducedMotion()) return;
+  for (const el of els) { el.classList.remove('fadein'); void el.offsetWidth; el.classList.add('fadein'); }
+}
+
+function renderConditions(spotSwitch = false) {
   const r = state.results[state.spotId];
   const spot = spotById(state.spotId);
   document.body.dataset.state = r === undefined ? 'loading' : r === 'error' ? 'error' : 'ready';
   $('#spotName').textContent = spot.fullName;
   syncFavorite();
   if (r === undefined || r === 'error') {
-    const msg = r === 'error' ? '<p class="na">Conditions temporarily unavailable</p>' : '<p class="na loading">Loading conditions…</p>';
-    for (const id of ['#score', '#window', '#strip', '#tideSummary', '#tideGraph', '#hourly', '#details']) $(id).innerHTML = '';
-    $('#score').className = 'score'; $('#score').innerHTML = msg;
+    $('#score').className = 'score';
+    $('#score').innerHTML = r === 'error' ? '<p class="na">Conditions temporarily unavailable</p>' : '<p class="na loading">Loading conditions…</p>';
     $('#window').hidden = true;
+    for (const id of ['#tideSummary', '#tideGraph', '#piratecast', '#pcReadout', '#details']) $(id).innerHTML = '';
+    tideGraph.reset();
     return;
   }
-  renderScore($('#score'), r);
-  renderWindow($('#window'), r);
-  renderStrip($('#strip'), r);
-  renderTideSummary($('#tideSummary'), r);
-  renderTideGraph($('#tideGraph'), r);
-  const showHourly = r.hourly.some(h => h.score != null);
-  $('#hourlyPanel').hidden = !showHourly;
-  if (showHourly) renderHourly($('#hourly'), r);
+  if (state.selT && state.selT < r.now) state.selT = null;
+  mountScore($('#score'), r);
+  renderWindow($('#window'), r, { onPick: t => { pirateCast.selectTime(t); $('#piratecastPanel').scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'nearest' }); } });
+  tideGraph.reset();
+  pirateCast.render(r, state.selT);          // silent: positions the selection
+  applySelection(pirateCast.selected);       // then sync everything to it
   renderDetails($('#details'), r);
   const missing = Object.entries(r.status).filter(([, ok]) => !ok).map(([k]) => ({ tide: 'tides', wind: 'observed wind', buoy: 'wave buoy', forecast: 'forecast' }[k]));
   $('#sourceNote').textContent = missing.length ? `Temporarily unavailable: ${missing.join(', ')}.` : '';
+  if (spotSwitch) fadeIn($('.rail'), $('#piratecastPanel'), $('.tidepanel'));
 }
 
 let resizeT;
 window.addEventListener('resize', () => {
   clearTimeout(resizeT);
-  resizeT = setTimeout(() => { const r = state.results[state.spotId]; if (r && r !== 'error') renderTideGraph($('#tideGraph'), r); }, 150);
+  resizeT = setTimeout(() => { const r = current(); if (r) tideGraph.render(r, state.selT || r.now, true); }, 150);
 });
+
+$('#window').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('#window').click(); } });
 
 // ---------- cam only ----------
 function setCamOnly(on) {
@@ -156,7 +180,6 @@ const first = initialRoute();
 select(first.spotId, first.cam);
 if (prefs.camOnly) setCamOnly(true);
 
-// Other spots load after the current one, when the browser is idle.
 const idle = window.requestIdleCallback || (fn => setTimeout(fn, 600));
 idle(() => spots.forEach(s => ensureLoaded(s.id)));
 
@@ -166,6 +189,9 @@ setInterval(() => {
   ensureLoaded(state.spotId, true).then(() => spots.filter(s => s.id !== state.spotId).forEach(s => ensureLoaded(s.id, true)));
 }, REFRESH_MS);
 document.addEventListener('visibilitychange', () => {
-  const r = state.results[state.spotId];
-  if (!document.hidden && r && r !== 'error' && Date.now() - r.now > REFRESH_MS) ensureLoaded(state.spotId, true);
+  const r = current();
+  if (!document.hidden && r && Date.now() - r.now > REFRESH_MS) ensureLoaded(state.spotId, true);
 });
+
+// Exposed for the future map (see docs/MAP.md): read-only access to loaded conditions.
+export const getConditions = () => ({ ...state.results });

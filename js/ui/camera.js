@@ -21,12 +21,10 @@ function loadHls() {
   return hlsLoader;
 }
 
-const BADGE = `<div style="width:215px;height:58px;background:#090a0b;border:1px solid #34383c;border-radius:4px;display:flex;align-items:center;padding:4px 10px;gap:10px;overflow:hidden">
-      <div style="width:47px;height:47px;border-radius:2px;overflow:hidden;background:white;flex:0 0 47px">
-        <svg viewBox="0 0 100 100" width="100%" height="100%" aria-hidden="true" style="display:block"><rect width="100" height="100" fill="#000"/><g stroke="#fff" stroke-width="9" stroke-linecap="round"><line x1="16" y1="62" x2="84" y2="94"/><line x1="84" y1="62" x2="16" y2="94"/></g><path fill="#fff" d="M50 8c-19 0-32 13-32 30 0 10 5 17 11 21v10c0 3 2 5 5 5h32c3 0 5-2 5-5V59c6-4 11-11 11-21C82 21 69 8 50 8z"/><circle cx="38" cy="40" r="8" fill="#000"/><circle cx="62" cy="40" r="8" fill="#000"/><path d="M50 50l-5 9h10z" fill="#000"/><g stroke="#000" stroke-width="2.5"><line x1="42" y1="66" x2="42" y2="74"/><line x1="50" y1="66" x2="50" y2="74"/><line x1="58" y1="66" x2="58" y2="74"/></g></svg>
-      </div>
-      <span style="font-family:'Pirata One',Georgia,serif;color:#f4f1e8;font-size:22px;letter-spacing:.8px;white-space:nowrap">PIRATE VIEW</span>
-    </div>`;
+// Broadcast-style bug, top-left, sized by CSS to the Angelcam logo underneath
+// (that logo scales with the player height: 7% of it, clamped 15–30 px).
+const SKULL = '<svg viewBox="0 0 100 100" aria-hidden="true"><g stroke="#fff" stroke-width="9" stroke-linecap="round"><line x1="16" y1="62" x2="84" y2="94"/><line x1="84" y1="62" x2="16" y2="94"/></g><path fill="#fff" d="M50 8c-19 0-32 13-32 30 0 10 5 17 11 21v10c0 3 2 5 5 5h32c3 0 5-2 5-5V59c6-4 11-11 11-21C82 21 69 8 50 8z"/><circle cx="38" cy="40" r="8" fill="#0a0b0c"/><circle cx="62" cy="40" r="8" fill="#0a0b0c"/><path d="M50 50l-5 9h10z" fill="#0a0b0c"/></svg>';
+const BUG = `${SKULL}<span>PIRATE VIEW</span>`;
 
 function showFailure(media, onRetry) {
   if (media.querySelector('.cam-fail')) return;
@@ -66,10 +64,9 @@ export async function renderMedia(media, c) {
     e = document.createElement('iframe'); e.src = c.src; e.allow = 'autoplay; fullscreen; picture-in-picture'; e.allowFullscreen = true;
     e.title = `${c.name} live camera`;
     media.appendChild(e);
-    const flag = document.createElement('div');
-    flag.className = 'pirate-cover';
-    flag.style.display = 'flex';
-    flag.innerHTML = BADGE;
-    media.appendChild(flag);
+    const bug = document.createElement('div');
+    bug.className = 'pv-bug';
+    bug.innerHTML = BUG;
+    media.appendChild(bug);
   }
 }
