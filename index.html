@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0a0d10"><title>Skim Cams</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Pirata+One&display=swap');
+:root{--bg:#0a0d10;--panel:#11161b;--panel2:#151b21;--line:#242c34;--text:#f3f5f7;--muted:#87929d;--accent:#dce5eb}
+*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif}
+body{min-height:100vh}main{width:min(1040px,100%);margin:auto;padding:42px 20px 64px}
+header{display:flex;align-items:end;justify-content:space-between;margin-bottom:20px}h1{font-family:'Pirata One',Georgia,serif;font-size:36px;letter-spacing:.5px;margin:0;font-weight:400}.status{font-size:12px;color:var(--muted)}
+.viewer{background:#000;border:1px solid var(--line);border-radius:14px;overflow:hidden}#media{aspect-ratio:16/9;background:#000;position:relative}iframe,video{display:block;width:100%;height:100%;border:0;background:#000}
+.meta{display:flex;align-items:center;justify-content:space-between;padding:15px 17px;background:var(--panel);border-top:1px solid var(--line);gap:16px}
+.camtitle{font-size:17px;font-weight:600;letter-spacing:-.2px}.camnote{font-size:12px;color:var(--muted);margin-top:3px}
+.direct{font-size:12px;color:var(--accent);text-decoration:none;border:1px solid var(--line);border-radius:8px;padding:8px 11px;white-space:nowrap}
+nav{display:flex;gap:8px;overflow-x:auto;padding:18px 0 2px;scrollbar-width:none}nav::-webkit-scrollbar{display:none}
+.spot{font-family:'Pirata One',Georgia,serif;letter-spacing:.25px;font-size:16px!important;appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--muted);border-radius:9px;padding:10px 14px;font:inherit;font-size:13px;font-weight:550;white-space:nowrap;cursor:pointer}
+.spot:hover{background:var(--panel2);color:var(--text)}.spot.active{background:var(--accent);border-color:var(--accent);color:#0a0d10}
+.angles{display:flex;gap:7px;margin-top:10px;min-height:34px}.angle{appearance:none;border:0;background:transparent;color:var(--muted);padding:7px 0;margin-right:14px;font:inherit;font-size:12px;cursor:pointer;border-bottom:1px solid transparent}
+.angle.active{color:var(--text);border-bottom-color:var(--text)}
+.help{margin-top:26px;padding-top:18px;border-top:1px solid var(--line);font-size:11px;color:#66717b;line-height:1.5}
+
+.pirate-cover{position:absolute;left:10px;top:10px;z-index:20;width:215px;height:58px;
+display:none;align-items:center;justify-content:center;pointer-events:none;
+filter:drop-shadow(0 2px 5px rgba(0,0,0,.5));overflow:hidden;border-radius:5px}
+.pirate-cover svg{width:100%;height:100%;display:block}
+@media(max-width:650px){main{padding:24px 14px 48px}header{margin-bottom:14px}h1{font-size:32px}.status{display:none}.viewer{border-radius:10px}.meta{padding:12px 13px}.camtitle{font-size:15px}}
+</style></head>
+<body><main>
+<header><h1>Skim Cams</h1><div class="status">Verified coastal cameras</div></header>
+<div class="viewer">
+  <div id="media"></div>
+  <div class="meta">
+    <div><div class="camtitle" id="camtitle"></div><div class="camnote" id="camnote"></div></div>
+    <a class="direct" id="direct" target="_blank" rel="noopener">Open source</a>
+  </div>
+</div>
+<nav id="spots"></nav><div class="angles" id="angles"></div>
+<div class="help">Only working, useful views are shown. Inlet cameras may rotate. DelDOT feeds may require Play in Safari. New spots are added only after the live player is verified.</div>
+</main>
+<script>
+const cams=[{"spot": "Dewey", "name": "Dewey Beach", "kind": "iframe", "src": "https://v.angelcam.com/iframe?autoplay=1&v=27r3vv4pyx", "note": "Oceanfront"}, {"spot": "Indian River", "name": "Inlet North", "kind": "hls", "src": "https://video.deldot.gov/live/SCAM098.stream/playlist.m3u8", "note": "North side"}, {"spot": "Indian River", "name": "Inlet Overview", "kind": "hls", "src": "https://video.deldot.gov/live/SCAM169.stream/playlist.m3u8", "note": "South pylon"}, {"spot": "Bethany", "name": "Bethany Ocean", "kind": "iframe", "src": "https://v.angelcam.com/iframe?autoplay=1&v=boykze68y8", "note": "East / ocean"}, {"spot": "Bethany", "name": "Bethany North", "kind": "iframe", "src": "https://v.angelcam.com/iframe?autoplay=1&v=v8yp6jmpr6", "note": "North view"}, {"spot": "Bethany", "name": "Bethany South", "kind": "iframe", "src": "https://v.angelcam.com/iframe?autoplay=1&v=ger25k77rm", "note": "South view"}];
+const media=document.querySelector('#media'), title=document.querySelector('#camtitle'), note=document.querySelector('#camnote'), direct=document.querySelector('#direct'), spots=document.querySelector('#spots'), angles=document.querySelector('#angles');
+const groups=[...new Set(cams.map(c=>c.spot))];
+let current=0;
+
+function renderMedia(c){
+ media.innerHTML='';
+ let e;
+ if(c.kind==='hls'){
+   e=document.createElement('video'); e.controls=true; e.autoplay=true; e.muted=true; e.playsInline=true; e.src=c.src;
+ } else {
+   e=document.createElement('iframe'); e.src=c.src; e.allow='autoplay; fullscreen; picture-in-picture'; e.allowFullscreen=true;
+ }
+ media.appendChild(e);
+ if(c.kind==='iframe'){
+   const flag=document.createElement('div');
+   flag.className='pirate-cover';
+   flag.style.display='flex';
+   flag.innerHTML=`<div style="width:215px;height:58px;background:#090a0b;border:1px solid #34383c;border-radius:4px;display:flex;align-items:center;padding:4px 10px;gap:10px;overflow:hidden">
+      <div style="width:47px;height:47px;border-radius:2px;overflow:hidden;background:white;flex:0 0 47px">
+        <img src="https://static.vecteezy.com/system/resources/previews/025/377/821/non_2x/skull-and-crossbones-black-on-white-background-vector.jpg" alt="" style="width:100%;height:100%;object-fit:cover;display:block;filter:invert(1)">
+      </div>
+      <span style="font-family:'Pirata One',Georgia,serif;color:#f4f1e8;font-size:22px;letter-spacing:.8px;white-space:nowrap">PIRATE VIEW</span>
+    </div>`;
+   media.appendChild(flag);
+ }
+ title.textContent=c.name; note.textContent=c.note; direct.href=c.src;
+}
+function choose(i){
+ current=i; const c=cams[i]; renderMedia(c); renderSpots(c.spot); renderAngles(c.spot,i);
+ history.replaceState(null,'','#'+encodeURIComponent(c.name.toLowerCase().replaceAll(' ','-')));
+}
+function renderSpots(active){
+ spots.innerHTML='';
+ groups.forEach(g=>{let b=document.createElement('button'); b.className='spot'+(g===active?' active':''); b.textContent=g;
+ b.onclick=()=>choose(cams.findIndex(c=>c.spot===g)); spots.appendChild(b);});
+}
+function renderAngles(group,activeIndex){
+ angles.innerHTML=''; const arr=cams.map((c,i)=>[c,i]).filter(([c])=>c.spot===group);
+ if(arr.length<2)return;
+ arr.forEach(([c,i])=>{let b=document.createElement('button'); b.className='angle'+(i===activeIndex?' active':''); b.textContent=c.name.replace(group,'').replace('Bethany ','').replace('Inlet ','').trim()||c.note; b.onclick=()=>choose(i); angles.appendChild(b);});
+}
+const hash=decodeURIComponent(location.hash.slice(1));
+const initial=hash?cams.findIndex(c=>c.name.toLowerCase().replaceAll(' ','-')===hash):-1;
+choose(initial>=0?initial:0);
+</script></body></html>
