@@ -9,6 +9,7 @@
 <link rel="preconnect" href="https://api.tidesandcurrents.noaa.gov" crossorigin>
 <link rel="preconnect" href="https://api.weather.gov" crossorigin>
 <link rel="preconnect" href="https://v.angelcam.com">
+<link rel="dns-prefetch" href="https://tiles.maps.eox.at">
 <link rel="stylesheet" href="/css/app.css">
 <script type="module" src="/js/app.js"></script>
 </head>
@@ -54,6 +55,14 @@
     <p class="legend"><span class="sw best"></span>Best window <span class="sw night"></span>Night <span class="sw now"></span>Now <span class="sw ph"></span>Selected time · tap the graph to pick a time</p>
   </section>
 
+  <section class="panel windmap" id="windmapPanel" aria-label="Wind map">
+    <div class="wmhead"><h3>Wind map</h3><span class="wm-time">Now</span></div>
+    <div class="wm-map" role="region" aria-label="Satellite map of the Delaware beaches with animated wind"></div>
+    <p class="wm-info"></p>
+    <p class="legend wm-legend"><span class="wm-key"></span>Particles move the way the wind blows · faster = stronger.
+      Spot-based: blended from the real wind at Pirate View spots, not a regional weather model.</p>
+  </section>
+
   <section class="panel detailpanel">
     <h3>Conditions detail</h3>
     <div id="details" class="details"></div>
@@ -61,7 +70,7 @@
   </section>
 
   <footer class="help">
-    Cams: Angelcam, DelDOT · Tides: NOAA CO-OPS · Wind &amp; temps: NOAA CO-OPS, National Weather Service · Waves &amp; water: NOAA NDBC 44084 ·
+    Cams: Angelcam, DelDOT · Map imagery: EOX Sentinel-2 cloudless 2016, USGS The National Map · Tides: NOAA CO-OPS · Wind &amp; temps: NOAA CO-OPS, National Weather Service · Waves &amp; water: NOAA NDBC 44084 ·
     Pirate Score is a Pirate View estimate, not an official forecast — check the beach yourself.
   </footer>
 </main>

@@ -10,6 +10,8 @@ const dayWord = (d, now) => {
 };
 const wk = d => d.toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'short' });
 export const whenLabel = (s, cond) => (s === cond.timeline[0] ? 'Now' : `${etDate(s.t) === etDate(cond.now) ? '' : wk(s.t) + ' '}${hour(s.t).replace('a', ' AM').replace('p', ' PM')}`);
+/** Label for an exact selected time (null = now): "Now", "8 PM", "Sun 8:15 AM". */
+export const timeLabel = (t, cond) => (!t ? 'Now' : `${etDate(t) === etDate(cond.now) ? '' : wk(t) + ' '}${t.getMinutes() ? time(t) : hour(t).replace('a', ' AM').replace('p', ' PM')}`);
 
 const ARROW = '<svg class="warrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l5 8h-3.5v10h-3V11H7z"/></svg>';
 
@@ -46,9 +48,8 @@ export function mountScore(el, cond) {
     ${notCfg ? '' : '<details class="why"><summary>Why this score?</summary><ul></ul><p class="fine">Pirate View estimate from NOAA data.</p></details>'}`;
 }
 
-export function updateScore(el, cond, s, { onBackToNow } = {}) {
-  const isNow = s === cond.timeline[0];
-  el.querySelector('.when').textContent = whenLabel(s, cond);
+export function updateScore(el, cond, s, { onBackToNow, label, isNow = s === cond.timeline[0] } = {}) {
+  el.querySelector('.when').textContent = label || whenLabel(s, cond);
   const back = el.querySelector('.backnow');
   back.hidden = isNow;
   back.onclick = onBackToNow;
@@ -97,12 +98,12 @@ export function renderWindow(el, cond, { onPick } = {}) {
 }
 
 // ---------- tide summary (follows selection) ----------
-export function renderTideSummary(el, cond, s) {
+export function renderTideSummary(el, cond, s, label) {
   if (!cond.tide || !s.tide) { el.innerHTML = ''; return; }
   const nh = cond.tide.nextHigh(s.t), nl = cond.tide.nextLow(s.t);
   const ev = (k, e) => (e ? `<div><div class="k">Next ${k}</div><div class="v">${time(e.t)}</div><div class="s">${ft(e.v)}</div></div>` : '');
   const order = nh && nl && nl.t < nh.t ? [['low', nl], ['high', nh]] : [['high', nh], ['low', nl]];
-  el.innerHTML = `<div><div class="k">${s === cond.timeline[0] ? 'Tide now' : 'Tide ' + whenLabel(s, cond)}</div><div class="v">${s.tide.height.toFixed(1)} ft</div><div class="s">${s.tide.rising ? 'Rising' : 'Falling'}</div></div>${order.map(([k, e]) => ev(k, e)).join('')}`;
+  el.innerHTML = `<div><div class="k">${label ? (label === 'Now' ? 'Tide now' : 'Tide ' + label) : s === cond.timeline[0] ? 'Tide now' : 'Tide ' + whenLabel(s, cond)}</div><div class="v">${s.tide.height.toFixed(1)} ft</div><div class="s">${s.tide.rising ? 'Rising' : 'Falling'}</div></div>${order.map(([k, e]) => ev(k, e)).join('')}`;
 }
 
 // ---------- details (current observations; secondary) ----------

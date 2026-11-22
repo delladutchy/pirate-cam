@@ -8,7 +8,9 @@ import { buildConditions } from './engine/conditions.js';
 import { renderMedia } from './ui/camera.js';
 import { createTideGraph } from './ui/tidegraph.js';
 import { createPirateCast } from './ui/piratecast.js';
-import { mountScore, updateScore, renderWindow, renderTideSummary, renderDetails, facts, whenLabel } from './ui/conditions.js';
+import { mountScore, updateScore, renderWindow, renderTideSummary, renderDetails, facts, timeLabel } from './ui/conditions.js';
+import { sampleAt } from './map/model.js';
+import { createWindMap } from './map/windmap.js';
 import { esc } from './ui/format.js';
 import { reducedMotion } from './ui/motion.js';
 import { prefs } from './prefs.js';
@@ -38,7 +40,7 @@ function select(spotId, cam) {
   if (camChanged) showCamera();
   renderSpotNav();
   renderAngles();
-  if (spotChanged) { renderConditions(true); ensureLoaded(spotId); }
+  if (spotChanged) { renderConditions(true); ensureLoaded(spotId); updateMap(); }
 }
 
 window.addEventListener('hashchange', () => { const r = resolveHash(location.hash, slugs); if (r) select(r.spotId, r.cam); });
@@ -99,23 +101,45 @@ async function ensureLoaded(spotId, force = false) {
   }
   renderSpotNav();
   if (spotId === state.spotId) renderConditions();
+  else updateMap();
 }
 
-const tideGraph = createTideGraph($('#tideGraph'), { onPick: t => pirateCast.selectTime(t) });
-const pirateCast = createPirateCast($('#piratecast'), { onSelect: s => applySelection(s) });
-
+// ---------- the ONE shared selected time ----------
+// state.selT is the exact selected time (null = now). Weather/score come from the nearest
+// real forecast sample (15-min steps from hourly NWS values — nothing is interpolated);
+// the tide, which is a continuous NOAA-predicted curve, follows the exact time.
 function current() { const r = state.results[state.spotId]; return r && r !== 'error' ? r : null; }
 
-function applySelection(s) {
-  const r = current(); if (!r || !s) return;
-  const isNow = s === r.timeline[0];
-  state.selT = isNow ? null : s.t;
-  updateScore($('#score'), r, s, { onBackToNow: () => pirateCast.select(0) });
-  renderTideSummary($('#tideSummary'), r, s);
-  tideGraph.render(r, s.t);
-  const f = facts(s);
-  $('#pcReadout').innerHTML = `<b>${whenLabel(s, r)}</b>${s.score != null ? ` · <span class="tone-${s.tone}"><span class="lbl"><i></i>${s.score.toFixed(1)} ${s.label}</span></span>` : ''}${['waves', 'wind', 'tide'].filter(k => f[k]).map(k => ` · ${k[0].toUpperCase() + k.slice(1)} ${f[k]}`).join('')}${s.daylight ? '' : ' · <span class="muted">after dark</span>'}`;
+function setTime(t, { from = '', dragging = false } = {}) {
+  const r = current(); if (!r) return;
+  const end = r.timeline.at(-1).t;
+  if (t && t > end) t = end;
+  if (t && t - r.now < 8 * 60e3) t = null; // within a few minutes of now → "Now"
+  state.selT = t;
+  const s = sampleAt(r.timeline, t);
+  const label = timeLabel(t, r);
+  const tideNow = t && r.tide && r.tide.covers(t) ? r.tide.at(t) : s.tide;
+  const shown = { ...s, tide: tideNow };
+  updateScore($('#score'), r, shown, { label, isNow: !t, onBackToNow: () => setTime(null, { from: 'back' }) });
+  renderTideSummary($('#tideSummary'), r, { t: t || r.now, tide: tideNow }, label);
+  tideGraph.render(r, t || r.now, { instant: dragging });
+  if (from !== 'cast') pirateCast.highlightTime(t || r.now, { scroll: dragging ? 'instant' : 'smooth' });
+  const f = facts(shown);
+  $('#pcReadout').innerHTML = `<b>${label}</b>${s.score != null ? ` · <span class="tone-${s.tone}"><span class="lbl"><i></i>${s.score.toFixed(1)} ${s.label}</span></span>` : ''}${['waves', 'wind', 'tide'].filter(k => f[k]).map(k => ` · ${k[0].toUpperCase() + k.slice(1)} ${f[k]}`).join('')}${s.daylight ? '' : ' · <span class="muted">after dark</span>'}`;
+  if (!dragging) updateMap();
+  else scheduleMap();
 }
+
+const tideGraph = createTideGraph($('#tideGraph'), { onPick: (t, o = {}) => setTime(t, { from: 'graph', dragging: !!o.dragging }) });
+const pirateCast = createPirateCast($('#piratecast'), { onSelect: (s, i) => setTime(i === 0 ? null : s.t, { from: 'cast' }) });
+const windMap = createWindMap($('#windmapPanel'), { onSelectSpot: id => select(id) });
+
+function updateMap() {
+  const r = current();
+  windMap.update({ spots, results: state.results, spotId: state.spotId, t: state.selT, label: r ? timeLabel(state.selT, r) : 'Now' });
+}
+let mapT = 0; // while scrubbing, refresh the map at most ~6×/s
+function scheduleMap() { if (!mapT) mapT = setTimeout(() => { mapT = 0; updateMap(); }, 160); }
 
 function fadeIn(...els) {
   if (reducedMotion()) return;
@@ -138,10 +162,10 @@ function renderConditions(spotSwitch = false) {
   }
   if (state.selT && state.selT < r.now) state.selT = null;
   mountScore($('#score'), r);
-  renderWindow($('#window'), r, { onPick: t => { pirateCast.selectTime(t); $('#piratecastPanel').scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'nearest' }); } });
+  renderWindow($('#window'), r, { onPick: t => { setTime(t, { from: 'window' }); $('#piratecastPanel').scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'nearest' }); } });
   tideGraph.reset();
-  pirateCast.render(r, state.selT);          // silent: positions the selection
-  applySelection(pirateCast.selected);       // then sync everything to it
+  pirateCast.render(r, state.selT);          // silent: positions the highlight
+  setTime(state.selT, { from: 'cast' });     // then sync everything to the shared time
   renderDetails($('#details'), r);
   const missing = Object.entries(r.status).filter(([, ok]) => !ok).map(([k]) => ({ tide: 'tides', wind: 'observed wind', buoy: 'wave buoy', forecast: 'forecast' }[k]));
   $('#sourceNote').textContent = missing.length ? `Temporarily unavailable: ${missing.join(', ')}.` : '';
@@ -151,7 +175,7 @@ function renderConditions(spotSwitch = false) {
 let resizeT;
 window.addEventListener('resize', () => {
   clearTimeout(resizeT);
-  resizeT = setTimeout(() => { const r = current(); if (r) tideGraph.render(r, state.selT || r.now, true); }, 150);
+  resizeT = setTimeout(() => { const r = current(); if (r) tideGraph.render(r, state.selT || r.now, { force: true }); }, 150);
 });
 
 $('#window').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('#window').click(); } });
@@ -175,6 +199,9 @@ function syncFavorite() {
 }
 $('#favBtn').addEventListener('click', () => { prefs.favorite = prefs.favorite === state.spotId ? null : state.spotId; syncFavorite(); });
 
+// Test hook, only with ?debug in the URL.
+if (new URLSearchParams(location.search).has('debug')) window.__pv = { state, windMap, setTime };
+
 // ---------- start ----------
 const first = initialRoute();
 select(first.spotId, first.cam);
@@ -193,5 +220,3 @@ document.addEventListener('visibilitychange', () => {
   if (!document.hidden && r && Date.now() - r.now > REFRESH_MS) ensureLoaded(state.spotId, true);
 });
 
-// Exposed for the future map (see docs/MAP.md): read-only access to loaded conditions.
-export const getConditions = () => ({ ...state.results });

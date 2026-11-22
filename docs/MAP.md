@@ -1,27 +1,34 @@
-# Pirate View map — status and next step
+# Wind map
 
-## Decision
-Not built into the UI yet, on purpose. A real geographic map needs a tile provider and a
-map library; doing it well (and keeping it fast on a phone at the beach) is its own piece
-of work and shouldn't compromise the camera → score → best window → PirateCast flow.
+## What it is
+A real geographic map (Leaflet 1.9.4, vendored, lazy-loaded) with:
+- **Imagery** (`js/map/provider.js`), no API keys, no cost:
+  - EOX Sentinel-2 cloudless **2016** — CC BY 4.0 (commercial use OK with attribution). Covers ocean + land.
+    Later EOX years are CC BY-NC-SA (non-commercial) — check the license before switching.
+  - USGS The National Map orthoimagery — US public domain; crisp beach detail from zoom 13 (its ocean is empty, so Sentinel shows through).
+  - No label overlay: EOX's OSM-based overlay has unclear reuse terms. Spot markers act as labels.
+- **Spot markers** at the coordinates in `js/config/spots.js`; tapping one calls the app's `select()`.
+- **Animated wind particles** (`js/map/particles.js`) driven by the shared selected time.
 
-## Already in place
-- `js/map/model.js`
-  - `mapMarkers(spots, results, t)` → per-spot `{ lat, lon, score, label, windMph, windFromDeg }`
-    at any forecast time (same time model as PirateCast).
-  - `windVectors(markers)` → u/v wind vectors ready for a flow/particle layer.
-- `js/app.js` exports `getConditions()`; spots carry `lat/lon` in `js/config/spots.js`.
-- All data is already loaded per spot (NWS gridpoints include hourly wind speed/direction for 48 h+).
+## Data flow (no duplicated state)
+app `state.results` + `state.selT` → `model.windPoints()` → `windfield.createSpotField()` → `particles.setField()`.
 
-## Next implementation step (no paid APIs or keys needed)
-1. **Map library:** Leaflet 1.9 (~40 KB gz), vendored like hls.js, lazy-loaded when the map panel scrolls into view.
-2. **Tiles:** a dark basemap. Options without keys: OpenStreetMap standard tiles (attribution required,
-   light traffic only per the OSM tile policy) or self-hosted/vector tiles (Protomaps PMTiles file on Vercel — no third-party tile traffic).
-   Recommended: **Protomaps PMTiles extract of Delmarva**, served from this project.
-3. **Markers:** `mapMarkers()` → small score pills (`DEWEY 2.0`); tap → `select(spotId)`.
-4. **Wind flow:** canvas overlay animating particles along `windVectors()`, interpolated
-   (inverse-distance) between spot grid points. For a wider field, sample NWS gridpoints on a
-   coarse lattice over the coast (cache in the existing `getJSON` layer). Respect `prefers-reduced-motion`
-   (static arrows instead of particles).
-5. **Time sync:** re-run `mapMarkers(spots, results, selectedT)` from `applySelection()` in `app.js`.
-6. **Later:** swell direction from NDBC 44084 `MWD` / NWS wave grids.
+## Direction semantics
+NOAA CO-OPS `wind.d` and NWS `windDirection` give the direction wind blows **from**.
+Particles travel toward `from + 180°` (`model.toVector`). Unit-tested in `tests/map.test.mjs`.
+
+## Honest limitation: spot-based field
+Pirate View loads wind per spot (NWS 2.5 km gridpoint forecast; NOAA CO-OPS observation for "now"),
+not a regional wind grid. `createSpotField` blends those real points with inverse-distance weighting.
+The UI says so under the map.
+
+## Upgrading to a gridded field
+Implement any object with `sample(lat, lon) → { u, v, mph }` (mph, u east, v north, travel direction) and
+pass it to `particles.setField()`. Options: sample a lattice of NWS gridpoints along the coast
+(cache via `data/http.js`), or a NOAA model grid served by a serverless function.
+
+## Performance
+Field sampled to a 22 px screen grid only on map move/zoom or time change; particles do lookups.
+Particle count scales with map area and device (≈150 phone, ≈600+ desktop).
+Paused when the map is off-screen, the tab is hidden, or during pan/zoom.
+Reduced motion: static arrow grid, no animation.

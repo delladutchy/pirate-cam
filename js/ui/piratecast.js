@@ -68,5 +68,9 @@ export function createPirateCast(el, { onSelect }) {
     if (e.key === 'ArrowLeft') { e.preventDefault(); select(selIdx - 1); cells[selIdx].focus({ preventScroll: true }); }
   });
 
-  return { render, select, selectTime: t => select(nearestIndex(t)), get selected() { return hours[selIdx]; } };
+  /** Move the highlight to the hour nearest `t` without emitting a selection (used when
+   *  another control — tide graph, best window, map — owns the change). */
+  function highlightTime(t, { scroll = 'smooth' } = {}) { select(nearestIndex(t), { scroll, silent: true }); }
+
+  return { render, select, highlightTime, get selected() { return hours[selIdx]; } };
 }
