@@ -38,9 +38,14 @@ export function createTimeDock(dock, { onPick, onDay, onNow, zone }) {
     days.innerHTML = dayList.map(d => {
       const p = d.preview || {}, off = !d.hasScores && d.index !== 0;
       const low = p.confidence === 'low';
-      const v = p.best != null ? `<span class="dv dg-${band(p.best)}t">${low ? '≈' : ''}${p.best.toFixed(1)}</span>` : '<span class="dv na">–</span>';
-      const aria = `${d.long}${p.best != null ? `, best ${p.best.toFixed(1)}${low ? ', low confidence' : ''}` : off ? ', not enough data' : ''}`;
-      return `<button type="button" role="tab" data-day="${d.index}" aria-selected="${d.index === day.index}" aria-label="${aria}" ${off ? 'disabled title="Not enough data"' : ''} class="${d.index === day.index ? 'on' : ''}"><span class="dn">${d.label}</span>${v}</button>`;
+      // future days show the DAY'S BEST (▲ = "peaks at"); Today shows the live score (a tap goes to NOW)
+      const peakMark = p.kind === 'daybest' ? '<i class="pk" aria-hidden="true">▲</i>' : '';
+      const v = p.best != null ? `<span class="dv dg-${band(p.best)}t">${peakMark}${low ? '≈' : ''}${p.best.toFixed(1)}</span>` : '<span class="dv na">–</span>';
+      const at = p.bestT ? ` at ${time(p.bestT)}` : '';
+      const what = p.kind === 'now' ? 'now' : "day's best";
+      const aria = `${d.long}${p.best != null ? `, ${what} ${p.best.toFixed(1)}${at}${low ? ', low confidence' : ''}` : off ? ', not enough data' : ''}`;
+      const title = p.best != null ? `${p.kind === 'now' ? 'Now' : "Day's best"} ${p.best.toFixed(1)}${at}${low ? ' · low confidence' : ''}` : off ? 'Not enough data' : '';
+      return `<button type="button" role="tab" data-day="${d.index}" aria-selected="${d.index === day.index}" aria-label="${aria}" ${title ? `title="${title}"` : ''} ${off ? 'disabled' : ''} class="${d.index === day.index ? 'on' : ''}"><span class="dn">${d.label}</span>${v}</button>`;
     }).join('');
     // keep the selected chip in view by scrolling ONLY the chip row (scrollIntoView could move the page)
     const on = days.querySelector('.on');

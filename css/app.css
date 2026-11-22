@@ -248,6 +248,7 @@ body.cam-only .timedock{display:none}
 .td-days button,.td-now{appearance:none;border:1px solid transparent;background:none;color:var(--muted);border-radius:999px;padding:6px 10px;font-size:12px;cursor:pointer;white-space:nowrap;min-height:34px}
 .td-days button{display:inline-flex;align-items:baseline;gap:5px;flex:0 0 auto}
 .td-days .dv{font-size:11px;font-weight:650;font-variant-numeric:tabular-nums}.td-days .dv.na{color:var(--faint)}
+.td-days .pk{font-style:normal;font-size:7px;margin-right:2px;vertical-align:1px;opacity:.8}
 .td-days button.on{background:var(--panel2);border-color:var(--line);color:var(--text)}
 .td-days button:disabled{opacity:.35;cursor:default}
 .td-now{border-color:var(--line);color:var(--accent);font-weight:600;letter-spacing:.5px;text-transform:uppercase;font-size:11px}

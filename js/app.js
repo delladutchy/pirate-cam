@@ -13,8 +13,8 @@ import { sampleAt } from './map/model.js';
 import { createDayGraph } from './ui/daygraph.js';
 import { createTimeDock } from './ui/timedock.js';
 import { forecastDays } from './engine/days.js';
-import { bestWindow, windRelation } from './engine/score.js';
-import { resolveSelection, daySummary } from './engine/timeline.js';
+import { dayBestWindow, windRelation } from './engine/score.js';
+import { resolveSelection } from './engine/timeline.js';
 import { recommendFor } from './engine/recommend.js';
 import { compass } from './ui/format.js';
 import { createWindMap } from './map/windmap.js';
@@ -128,13 +128,26 @@ function current() { const r = state.results[state.spotId]; return r && r !== 'e
 function dayInfo(r) {
   if (!r._days) {
     r._days = forecastDays(r.timeline, r.now);
-    for (const d of r._days) d.preview = daySummary(r.timeline, d);
+    // One DAY'S BEST window per day: the button's number, the time a tap selects, the day
+    // graph's BEST band and the day wording all come from it. (The "Best next window" and
+    // Go/Wait keep using bestWindow: the earliest good-enough opportunity.)
     r.dayWindows = r._days.map(d => {
       const ds = r.timeline.filter(s => s.t >= d.start && s.t < d.end && s.t >= r.now);
-      return ds.length > 2 ? bestWindow(ds) : null;
+      return ds.length > 2 ? dayBestWindow(ds) : null;
     });
+    for (const d of r._days) d.preview = dayPreview(r, d, r.dayWindows[d.index]);
   }
   return r._days;
+}
+/** What a day button shows. Today → the live score (a tap goes to NOW); other days → that
+ *  day's best (a tap goes to exactly that moment). */
+function dayPreview(r, d, w) {
+  if (d.index === 0) {
+    const s = r.timeline[0];
+    return s.score != null ? { best: s.score, tone: s.tone, bestT: null, confidence: s.confidence, kind: 'now' } : { best: null };
+  }
+  if (!w || !w.peak) return { best: null };
+  return { best: w.bestScore, tone: w.tone, bestT: w.bestT, confidence: w.peak.confidence ?? null, kind: 'daybest' };
 }
 const dayOf = (r, t) => dayInfo(r).find(d => t >= d.start && t < d.end) || dayInfo(r)[0];
 

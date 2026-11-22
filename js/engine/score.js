@@ -148,10 +148,29 @@ export function bestWindow(samples) {
   let b = a;
   while (b < samples.length - 1 && ok(samples[b + 1]) && samples[b + 1].score >= thr) b++;
   const peak = samples.slice(a, b + 1).reduce((p, x) => (x.score > p.score ? x : p));
-  // tighten the window around its peak
+  return windowAround(samples, peak);
+}
+
+/**
+ * DAY'S BEST: the window around the single highest-scoring daylight moment of `samples`
+ * (one day). Ties go to the earlier moment. Same tightening as bestWindow. Used for the
+ * day buttons, the day graph's BEST band and day-specific wording; bestWindow (earliest
+ * good-enough opportunity) stays the "Best next window" / Go-Wait logic.
+ */
+export function dayBestWindow(samples) {
+  const ok = x => x.daylight && x.score != null;
+  const day = samples.filter(ok);
+  if (!day.length) return { state: 'unknown' };
+  const peak = day.reduce((a, b) => (b.score > a.score ? b : a)); // strict > keeps the earliest tie
+  return windowAround(samples, peak);
+}
+
+// Tighten a window around its peak: neighbouring daylight samples within 0.7 of the peak.
+function windowAround(samples, peak) {
+  const ok = x => x.daylight && x.score != null;
   const near = peak.score - 0.7;
   const pi = samples.indexOf(peak);
-  a = pi; b = pi;
+  let a = pi, b = pi;
   while (a > 0 && ok(samples[a - 1]) && samples[a - 1].score >= near) a--;
   while (b < samples.length - 1 && ok(samples[b + 1]) && samples[b + 1].score >= near) b++;
   // samples[0] is 'now' (irregular); the rest are evenly spaced
