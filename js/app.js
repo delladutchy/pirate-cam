@@ -10,6 +10,10 @@ import { createTideGraph } from './ui/tidegraph.js';
 import { createPirateCast } from './ui/piratecast.js';
 import { mountScore, updateScore, renderWindow, renderTideSummary, renderDetails, facts, timeLabel } from './ui/conditions.js';
 import { sampleAt } from './map/model.js';
+import { createDayGraph } from './ui/daygraph.js';
+import { createTimeDock } from './ui/timedock.js';
+import { forecastDays } from './engine/days.js';
+import { bestWindow, windRelation } from './engine/score.js';
 import { createWindMap } from './map/windmap.js';
 import { esc } from './ui/format.js';
 import { reducedMotion } from './ui/motion.js';
@@ -110,8 +114,23 @@ async function ensureLoaded(spotId, force = false) {
 // the tide, which is a continuous NOAA-predicted curve, follows the exact time.
 function current() { const r = state.results[state.spotId]; return r && r !== 'error' ? r : null; }
 
-function setTime(t, { from = '', dragging = false } = {}) {
+/** Days + each day's best window, computed once per loaded result. */
+function dayInfo(r) {
+  if (!r._days) {
+    r._days = forecastDays(r.timeline, r.now);
+    r.dayWindows = r._days.map(d => {
+      const ds = r.timeline.filter(s => s.t >= d.start && s.t < d.end && s.t >= r.now);
+      return ds.length > 2 ? bestWindow(ds) : null;
+    });
+  }
+  return r._days;
+}
+const dayOf = (r, t) => dayInfo(r).find(d => t >= d.start && t < d.end) || dayInfo(r)[0];
+
+let lastDayKey = '';
+function setTime(t, { from = '', dragging = false, step = 0 } = {}) {
   const r = current(); if (!r) return;
+  if (step) t = new Date((state.selT || r.now).getTime() + step);
   const end = r.timeline.at(-1).t;
   if (t && t > end) t = end;
   if (t && t - r.now < 8 * 60e3) t = null; // within a few minutes of now → "Now"
@@ -120,19 +139,38 @@ function setTime(t, { from = '', dragging = false } = {}) {
   const label = timeLabel(t, r);
   const tideNow = t && r.tide && r.tide.covers(t) ? r.tide.at(t) : s.tide;
   const shown = { ...s, tide: tideNow };
-  updateScore($('#score'), r, shown, { label, isNow: !t, onBackToNow: () => setTime(null, { from: 'back' }) });
+  updateScore($('#score'), r, shown, { label, isNow: !t, relation: windRelation(r.spot.profile.shoreFacingDeg, s.wind), onBackToNow: () => setTime(null, { from: 'back' }) });
   renderTideSummary($('#tideSummary'), r, { t: t || r.now, tide: tideNow }, label);
   tideGraph.render(r, t || r.now, { instant: dragging });
   if (from !== 'cast') pirateCast.highlightTime(t || r.now, { scroll: dragging ? 'instant' : 'smooth' });
+  // day graph + dock: redraw when the day (or the data) changes, otherwise just move the marker
+  const day = dayOf(r, t || r.now), key = r.spot.id + '|' + day.index + '|' + r.now.getTime();
+  if (key !== lastDayKey) { lastDayKey = key; dayGraph.render(r, day, t); timeDock.render(r, dayInfo(r), day, t); }
+  else { dayGraph.place(t, dragging); timeDock.place(t, dragging); }
+  $('#dayLabel').textContent = `${day.label} · ${day.sub}`;
   const f = facts(shown);
   $('#pcReadout').innerHTML = `<b>${label}</b>${s.score != null ? ` · <span class="tone-${s.tone}"><span class="lbl"><i></i>${s.score.toFixed(1)} ${s.label}</span></span>` : ''}${['waves', 'wind', 'tide'].filter(k => f[k]).map(k => ` · ${k[0].toUpperCase() + k.slice(1)} ${f[k]}`).join('')}${s.daylight ? '' : ' · <span class="muted">after dark</span>'}`;
   if (!dragging) updateMap();
   else scheduleMap();
 }
 
+function pickDay(i) {
+  const r = current(); if (!r) return;
+  if (i === 0) return setTime(null, { from: 'day' });
+  const d = dayInfo(r)[i], w = r.dayWindows[i];
+  const noon = new Date(d.start.getTime() + 12 * 3600e3);
+  setTime(w && w.bestT ? w.bestT : noon, { from: 'day' });
+}
+
 const tideGraph = createTideGraph($('#tideGraph'), { onPick: (t, o = {}) => setTime(t, { from: 'graph', dragging: !!o.dragging }) });
 const pirateCast = createPirateCast($('#piratecast'), { onSelect: (s, i) => setTime(i === 0 ? null : s.t, { from: 'cast' }) });
 const windMap = createWindMap($('#windmapPanel'), { onSelectSpot: id => select(id) });
+const dayGraph = createDayGraph($('#dayGraph'), { onPick: (t, o = {}) => setTime(t, { from: 'graph', dragging: !!o.dragging, step: o.step || 0 }) });
+const timeDock = createTimeDock($('#timedock'), {
+  onPick: (t, o = {}) => setTime(t, { from: 'dock', dragging: !!o.dragging, step: o.step || 0 }),
+  onDay: pickDay, onNow: () => setTime(null, { from: 'now' }),
+  watch: [$('#piratecastPanel'), $('.tidepanel'), $('#windmapPanel')],
+});
 
 function updateMap() {
   const r = current();
@@ -164,6 +202,7 @@ function renderConditions(spotSwitch = false) {
   mountScore($('#score'), r);
   renderWindow($('#window'), r, { onPick: t => { setTime(t, { from: 'window' }); $('#piratecastPanel').scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'nearest' }); } });
   tideGraph.reset();
+  lastDayKey = '';
   pirateCast.render(r, state.selT);          // silent: positions the highlight
   setTime(state.selT, { from: 'cast' });     // then sync everything to the shared time
   renderDetails($('#details'), r);
@@ -175,7 +214,7 @@ function renderConditions(spotSwitch = false) {
 let resizeT;
 window.addEventListener('resize', () => {
   clearTimeout(resizeT);
-  resizeT = setTimeout(() => { const r = current(); if (r) tideGraph.render(r, state.selT || r.now, { force: true }); }, 150);
+  resizeT = setTimeout(() => { const r = current(); if (r) { tideGraph.render(r, state.selT || r.now, { force: true }); lastDayKey = ''; setTime(state.selT, { from: 'resize' }); } }, 150);
 });
 
 $('#window').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('#window').click(); } });

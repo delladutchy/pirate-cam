@@ -4,6 +4,7 @@
 import { makeTide } from './tide.js';
 import { daylightRanges, isDaylight } from './sun.js';
 import { scoreSample, bestWindow, buildSummary } from './score.js';
+import { dayStart } from './days.js';
 
 const MIN = 60e3, HOUR = 3600e3;
 const fresh = (t, ms, now) => t && now - t.getTime() < ms;
@@ -18,7 +19,8 @@ export function shorebreakEnergy(ft, periodS) {
 
 export function buildConditions(spot, data, now = new Date()) {
   const tide = data.tideEvents ? makeTide(data.tideEvents) : null;
-  const from = new Date(now.getTime() - 6 * HOUR), to = new Date(now.getTime() + 48 * HOUR);
+  // Forecast runs to the end of the day after tomorrow (Delaware time), so each day view covers whole days.
+  const from = new Date(now.getTime() - 6 * HOUR), to = dayStart(now, 3);
   const daylight = daylightRanges(from, to, spot.lat, spot.lon);
   const grid = data.grid;
   const g = t => (grid ? grid.at(t) : {});
@@ -52,19 +54,21 @@ export function buildConditions(spot, data, now = new Date()) {
 
   const nowSample = {
     t: now, tide: tideNow, wind, waves, pop: current.pop, thunder: num(g0.thunder), daylight: current.daylight,
+    airF: air ? air.f : null,
   };
   const nowScore = scoreSample(spot.profile, nowSample);
 
-  // ---- timeline: 15-minute steps for 48 h. Future steps use forecasts only. ----
+  // ---- timeline: 15-minute steps to the end of day 3. Future steps use forecasts only. ----
   const timeline = [{ ...nowSample, ...pickScore(nowScore) }];
   const start = Math.ceil(now.getTime() / (15 * MIN)) * 15 * MIN;
-  for (let ms = start; ms <= to.getTime(); ms += 15 * MIN) {
+  for (let ms = start; ms < to.getTime(); ms += 15 * MIN) {
     const t = new Date(ms), f = g(t);
     const s = {
       t, tide: tideAt(t),
       wind: f.windMph != null ? { mph: f.windMph, fromDeg: num(f.windFromDeg), gustMph: num(f.gustMph) } : null,
       waves: f.waveFt != null ? { ft: f.waveFt, periodS: null, fromDeg: null } : null,
       pop: num(f.pop), thunder: num(f.thunder), daylight: isDaylight(t, daylight),
+      airF: num(f.tempF),
     };
     timeline.push({ ...s, ...pickScore(scoreSample(spot.profile, s)) });
   }

@@ -13,7 +13,9 @@ export const whenLabel = (s, cond) => (s === cond.timeline[0] ? 'Now' : `${etDat
 /** Label for an exact selected time (null = now): "Now", "8 PM", "Sun 8:15 AM". */
 export const timeLabel = (t, cond) => (!t ? 'Now' : `${etDate(t) === etDate(cond.now) ? '' : wk(t) + ' '}${t.getMinutes() ? time(t) : hour(t).replace('a', ' AM').replace('p', ' PM')}`);
 
-const ARROW = '<svg class="warrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l5 8h-3.5v10h-3V11H7z"/></svg>';
+// Small compass: N tick + an arrow pointing where the wind BLOWS TO (meteorological from + 180).
+const COMPASS = '<svg class="wcompass" viewBox="0 0 36 36" aria-hidden="true"><circle cx="18" cy="18" r="16" class="wc-ring"/><text x="18" y="7.5" class="wc-n" text-anchor="middle">N</text><g class="wc-arrow"><path d="M18 7l5 9h-3.3v12h-3.4V16H13z"/></g></svg>';
+const REL = { offshore: 'Offshore', 'cross-shore': 'Cross-shore', onshore: 'Onshore', calm: 'Calm' };
 
 /** Plain-language condition facts for a sample. Missing values are left out, never guessed. */
 export function facts(s) {
@@ -37,19 +39,22 @@ export function mountScore(el, cond) {
   const notCfg = cond.score.reason === 'not-configured';
   el.className = 'score';
   el.innerHTML = `
-    <div class="kicker"><span class="when">Now</span><button type="button" class="backnow" hidden>Back to now</button></div>
+    <div class="kicker"><span class="mode"></span><span class="when">Now</span><button type="button" class="backnow" hidden>Now</button></div>
     ${notCfg ? `<div class="big muted small">Not rated yet</div><div class="sub">${esc(cond.spot.name)}'s skim profile hasn't been set up yet.</div>`
     : `<div class="scoreline"><span class="big num">–</span><span class="lbl"><i></i><span class="lbltxt"></span></span></div>`}
     <div class="facts">
-      <div class="f"><span class="fk">Waves</span><span class="fv" data-f="waves">–</span></div>
-      <div class="f"><span class="fk">Wind</span><span class="fv">${ARROW}<span data-f="wind">–</span></span></div>
-      <div class="f"><span class="fk">Tide</span><span class="fv" data-f="tide">–</span></div>
+      <div class="f fwind"><span class="fk">Wind</span><span class="fv">${COMPASS}<span><span data-f="wind">–</span><span class="fs" data-f="windsub"></span></span></span></div>
+      <div class="f"><span class="fk">Waves</span><span class="fv"><span><span data-f="waves">–</span><span class="fs" data-f="wavesub"></span></span></span></div>
+      <div class="f"><span class="fk">Tide</span><span class="fv"><span><span data-f="tide">–</span><span class="fs" data-f="tidesub"></span></span></span></div>
+      <div class="f"><span class="fk">Air</span><span class="fv"><span data-f="air">–</span></span></div>
     </div>
-    ${notCfg ? '' : '<details class="why"><summary>Why this score?</summary><ul></ul><p class="fine">Pirate View estimate from NOAA data.</p></details>'}`;
+    ${notCfg ? '' : '<p class="explain"></p><details class="why"><summary>Why this score?</summary><ul></ul><p class="fine">Pirate View estimate from NOAA data.</p></details>'}`;
 }
 
-export function updateScore(el, cond, s, { onBackToNow, label, isNow = s === cond.timeline[0] } = {}) {
-  el.querySelector('.when').textContent = label || whenLabel(s, cond);
+export function updateScore(el, cond, s, { onBackToNow, label, isNow = s === cond.timeline[0], relation = null } = {}) {
+  el.querySelector('.mode').textContent = isNow ? '● Live now' : 'Forecast · ';
+  el.querySelector('.mode').classList.toggle('live', isNow);
+  el.querySelector('.when').textContent = isNow ? '' : (label || whenLabel(s, cond));
   const back = el.querySelector('.backnow');
   back.hidden = isNow;
   back.onclick = onBackToNow;
@@ -57,18 +62,32 @@ export function updateScore(el, cond, s, { onBackToNow, label, isNow = s === con
     el.className = `score tone-${s.tone}`;
     tweenNumber(el.querySelector('.num'), s.score);
     el.querySelector('.lbltxt').textContent = s.label;
-    el.querySelector('.why ul').innerHTML = (s.reasons || []).map(r => `<li class="${r.sign === '+' ? 'pos' : 'neg'}"><b>${r.sign === '+' ? '+' : '−'}</b>${esc(r.text)}</li>`).join('');
+    const rs = s.reasons || [];
+    el.querySelector('.why ul').innerHTML = rs.map(r => `<li class="${r.sign === '+' ? 'pos' : 'neg'}"><b>${r.sign === '+' ? '+' : '−'}</b>${esc(r.text)}</li>`).join('');
+    const pick = [...rs.filter(r => r.sign === '+').slice(0, 2), ...rs.filter(r => r.sign === '-').slice(0, 2)];
+    el.querySelector('.explain').innerHTML = pick.map(r => `<span class="${r.sign === '+' ? 'pos' : 'neg'}">${r.sign === '+' ? '+' : '−'} ${esc(r.text)}</span>`).join('');
   } else if (el.querySelector('.num')) {
     el.className = 'score tone-none';
     el.querySelector('.num').textContent = '–'; el.querySelector('.num').dataset.v = '';
-    el.querySelector('.lbltxt').textContent = 'Not available';
+    el.querySelector('.lbltxt').textContent = 'No score';
     el.querySelector('.why ul').innerHTML = '';
+    el.querySelector('.explain').textContent = s.daylight === false ? '' : 'Not enough forecast data for a score at this time.';
   }
   const f = facts(s);
-  for (const k of ['waves', 'wind', 'tide']) el.querySelector(`[data-f=${k}]`).textContent = f[k] || 'Not available';
-  const arrow = el.querySelector('.warrow');
-  arrow.style.visibility = s.wind && Number.isFinite(s.wind.fromDeg) ? 'visible' : 'hidden';
-  if (s.wind && Number.isFinite(s.wind.fromDeg)) rotateTo(arrow, s.wind.fromDeg + 180); // arrow shows where the wind blows
+  const set = (k, v) => { el.querySelector(`[data-f=${k}]`).textContent = v; };
+  set('wind', f.wind || 'Not available');
+  const gust = s.wind && Number.isFinite(s.wind.gustMph) && s.wind.gustMph > s.wind.mph + 0.5 ? `gusts ${Math.round(s.wind.gustMph)}` : '';
+  set('windsub', [gust, relation ? REL[relation] : ''].filter(Boolean).join(' · '));
+  set('waves', f.waves || 'Not available');
+  set('wavesub', s.waves && Number.isFinite(s.waves.fromDeg) ? `from ${compass(s.waves.fromDeg)}` : '');
+  set('tide', f.tide || 'Not available');
+  set('tidesub', s.tide ? (s.tide.rising ? 'Rising' : 'Falling') : '');
+  set('air', Number.isFinite(s.airF) ? `${Math.round(s.airF)}°F` : 'Not available');
+  const rel = el.querySelector('.fwind'); rel.dataset.rel = relation || '';
+  const arrow = el.querySelector('.wc-arrow');
+  const hasDir = s.wind && Number.isFinite(s.wind.fromDeg) && s.wind.mph >= 1;
+  arrow.style.visibility = hasDir ? 'visible' : 'hidden';
+  if (hasDir) rotateTo(arrow, s.wind.fromDeg + 180); // arrow shows where the wind blows
 }
 
 // ---------- best window ----------

@@ -1,6 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Pirata+One&display=swap');
 :root{--bg:#0a0d10;--panel:#11161b;--panel2:#151b21;--line:#242c34;--text:#f3f5f7;--muted:#87929d;--faint:#5f6a74;--accent:#dce5eb;
-  --firing:#8fe3c6;--great:#a9dfc0;--good:#d9d3a3;--ok:#cfc19b;--maybe:#b9a58a;--poor:#7d8790;--best:rgba(143,227,198,.10);--t:260ms}
+  --firing:#8fe3c6;--great:#a9dfc0;--good:#d9d3a3;--ok:#cfc19b;--maybe:#b9a58a;--poor:#7d8790;--best:rgba(143,227,198,.10);--t:260ms;
+  --sg:#6fcf97;--sa:#e3b35b;--sr:#c4776b;--td-g:#5fb886;--td-a:#d6a54f;--td-r:#b06a60;--td-past:#1b2128;--td-none:#151a1f}
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
 body{min-height:100vh;overflow-x:hidden}
@@ -73,7 +74,7 @@ h1{font-family:'Pirata One',Georgia,serif;font-size:34px;letter-spacing:.5px}
 .spothead h2{font-size:15px;font-weight:600;letter-spacing:-.1px}
 .fav{appearance:none;border:0;background:none;color:var(--muted);font-size:12px;cursor:pointer;padding:8px 0}
 .fav[aria-pressed=true]{color:var(--accent)}
-.kicker{font-size:10.5px;letter-spacing:.9px;text-transform:uppercase;color:var(--muted);margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:20px}
+.kicker{font-size:10.5px;letter-spacing:.9px;text-transform:uppercase;color:var(--muted);margin-bottom:6px;display:flex;align-items:center;gap:4px;min-height:24px}
 .kicker.go{color:var(--firing)}
 .score,.window{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
 .window{margin-top:12px;cursor:pointer;transition:border-color var(--t)}
@@ -83,10 +84,21 @@ h1{font-family:'Pirata One',Georgia,serif;font-size:34px;letter-spacing:.5px}
 .big{font-size:52px;font-weight:600;letter-spacing:-2px;line-height:1;font-variant-numeric:tabular-nums}
 .big.small{font-size:22px;letter-spacing:-.3px;font-weight:500}
 .lbl{font-size:12px;font-weight:700;letter-spacing:1px;display:inline-flex;align-items:center;gap:6px}
-.facts{display:grid;grid-template-columns:repeat(3,auto);justify-content:start;gap:4px 22px;margin-top:14px}
+.facts{display:grid;grid-template-columns:1fr 1fr;gap:12px 18px;margin-top:14px}
 .f{display:flex;flex-direction:column;gap:3px;min-width:0}
 .fk{font-size:10px;letter-spacing:.9px;text-transform:uppercase;color:var(--muted)}
-.fv{font-size:15px;font-weight:600;white-space:nowrap;font-variant-numeric:tabular-nums;display:inline-flex;align-items:center;gap:4px}
+.fv{font-size:15px;font-weight:600;white-space:nowrap;font-variant-numeric:tabular-nums;display:inline-flex;align-items:center;gap:8px}
+.fv>span{display:flex;flex-direction:column;gap:2px}
+.fs{font-size:11px;font-weight:500;color:var(--muted)}
+.fwind[data-rel=offshore] .fs{color:var(--sg)}.fwind[data-rel=onshore] .fs{color:var(--sr)}.fwind[data-rel=cross-shore] .fs{color:var(--sa)}
+.wcompass{width:34px;height:34px;flex:0 0 34px}
+.wc-ring{fill:none;stroke:var(--line);stroke-width:1.5}
+.wc-n{fill:var(--faint);font-size:6.5px;font-weight:600}
+.wc-arrow{fill:var(--accent);transform-box:view-box;transform-origin:18px 18px;transition:transform var(--t) cubic-bezier(.3,.7,.3,1)}
+.explain{display:flex;flex-wrap:wrap;gap:4px 12px;margin:12px 0 0;font-size:12px;color:var(--muted)}
+.explain .pos{color:#a9d9bf}.explain .neg{color:#d5b48f}
+.mode{color:var(--muted)}.mode.live{color:var(--firing)}
+.kicker .when{margin-right:auto}
 .warrow{width:15px;height:15px;fill:var(--accent);transition:transform var(--t) cubic-bezier(.3,.7,.3,1);flex:0 0 15px}
 .mid{font-size:20px;font-weight:600;letter-spacing:-.3px;line-height:1.2}
 .wday{font-size:12px;color:var(--muted);margin-bottom:2px}
@@ -162,6 +174,59 @@ h1{font-family:'Pirata One',Georgia,serif;font-size:34px;letter-spacing:.5px}
 .playhead circle{fill:var(--bg);stroke:var(--accent);stroke-width:2.5}
 .playhead .ph-txt{fill:var(--text);font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;paint-order:stroke;stroke:var(--bg);stroke-width:4px;stroke-linejoin:round}
 .playhead.instant,.playhead.instant .ph-dot{transition:none}
+
+/* LIVE camera badge — the camera is always real time */
+.livebadge{display:inline-block;font-size:9.5px;font-weight:700;letter-spacing:1px;color:#0a0d10;background:#e06c5a;border-radius:4px;padding:2px 5px;margin-right:8px;vertical-align:2px}
+
+/* full-day Pirate Score graph */
+.daylabel{font-size:12px;color:var(--muted)}
+.daygraph-wrap{width:100%;overflow:hidden;cursor:pointer;margin-top:4px}
+.daygraph{display:block;touch-action:pan-y}
+.daygraph:focus-visible{outline:1px solid var(--accent);outline-offset:4px;border-radius:4px}
+.dg-night{fill:#0c1014}.dg-day{fill:#121820}
+.dg-past{fill:rgba(10,13,16,.72)}
+.dg-nodata{fill:rgba(10,13,16,.6)}
+.dg-note{fill:var(--faint);font-size:11px;letter-spacing:.5px}
+.dg-guide{stroke:var(--line);stroke-width:1;stroke-dasharray:2 4}
+.dg-axis{fill:var(--faint);font-size:10.5px;font-variant-numeric:tabular-nums}
+.dg-best{fill:var(--best)}
+.dg-bestlbl{fill:var(--firing);font-size:9.5px;letter-spacing:1px}
+.dg-fill{stroke:none;opacity:.22}.dg-line{stroke-width:2.2;stroke-linecap:round}
+.dg-fill.dg-dark{opacity:.06}.dg-line.dg-dark{opacity:.35;stroke-width:1.5}
+.dg-fill.dg-g{fill:var(--sg)}.dg-fill.dg-a{fill:var(--sa)}.dg-fill.dg-r{fill:var(--sr)}
+.dg-line.dg-g{stroke:var(--sg)}.dg-line.dg-a{stroke:var(--sa)}.dg-line.dg-r{stroke:var(--sr)}
+.dg-gt{color:var(--sg)}.dg-at{color:var(--sa)}.dg-rt{color:var(--sr)}
+.dg-now{stroke:var(--text);stroke-width:1;opacity:.45}
+.dg-nowtxt{fill:var(--muted);font-size:9px;letter-spacing:.8px}
+.dg-marker{transition:transform var(--t) cubic-bezier(.3,.7,.3,1)}
+.dg-marker line{stroke:var(--accent);stroke-width:1.5}
+.dg-marker .dg-dot{transition:transform var(--t) cubic-bezier(.3,.7,.3,1),opacity var(--t)}
+.dg-marker circle{fill:var(--bg);stroke:var(--accent);stroke-width:2.5}
+.dg-marker.instant,.dg-marker.instant .dg-dot{transition:none}
+.legend .sw.g{background:var(--sg)}.legend .sw.a{background:var(--sa);margin-left:8px}.legend .sw.r{background:var(--sr);margin-left:8px}
+.dg-legend .sw.best{margin-left:8px}
+
+/* bottom time dock */
+.timedock{position:fixed;left:50%;bottom:calc(10px + env(safe-area-inset-bottom));transform:translate(-50%,140%);z-index:60;width:min(600px,calc(100% - 20px));
+  background:rgba(14,18,23,.94);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border:1px solid var(--line);border-radius:16px;padding:8px 14px 12px;
+  box-shadow:0 8px 30px rgba(0,0,0,.45);transition:transform 260ms cubic-bezier(.3,.7,.3,1),opacity 200ms;opacity:0;pointer-events:none}
+body.dock-on .timedock{transform:translate(-50%,0);opacity:1;pointer-events:auto}
+body.dock-on main{padding-bottom:calc(130px + env(safe-area-inset-bottom))}
+body.cam-only .timedock{display:none}
+.td-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:22px}
+.td-days{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none}
+.td-days button,.td-now{appearance:none;border:1px solid transparent;background:none;color:var(--muted);border-radius:999px;padding:7px 11px;font-size:12px;cursor:pointer;white-space:nowrap;min-height:34px}
+.td-days button.on{background:var(--panel2);border-color:var(--line);color:var(--text)}
+.td-days button:disabled{opacity:.35;cursor:default}
+.td-now{border-color:var(--line);color:var(--accent);font-weight:600;letter-spacing:.5px;text-transform:uppercase;font-size:11px}
+.td-slider{position:relative;height:28px;touch-action:none;cursor:pointer;user-select:none;-webkit-user-select:none}
+.td-slider:focus-visible{outline:1px solid var(--accent);outline-offset:4px;border-radius:6px}
+.td-strip{position:absolute;left:0;right:0;top:11px;height:6px;border-radius:3px;opacity:.9}
+.td-handle{position:absolute;top:4px;width:20px;height:20px;margin-left:-10px;border-radius:50%;background:var(--text);box-shadow:0 0 0 3px rgba(10,13,16,.9),0 2px 8px rgba(0,0,0,.5);transition:left var(--t) cubic-bezier(.3,.7,.3,1)}
+.td-handle.instant{transition:none}
+.timedock.dragging .td-handle{transform:scale(1.15)}
+.td-bubble{position:absolute;bottom:28px;left:50%;white-space:nowrap;font-size:12px;font-weight:600;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:3px 8px;font-variant-numeric:tabular-nums;pointer-events:none}
+.td-bubble b{margin-left:4px}
 
 /* tide scrubbing */
 .tidegraph:focus-visible{outline:1px solid var(--accent);outline-offset:4px;border-radius:4px}

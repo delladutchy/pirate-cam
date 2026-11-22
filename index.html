@@ -28,7 +28,7 @@
       <div class="viewer">
         <div id="media"></div>
         <div class="meta">
-          <div><div class="camtitle" id="camtitle"></div><div class="camnote" id="camnote"></div></div>
+          <div><div class="camtitle"><span class="livebadge" title="Live camera — always real time, independent of the forecast time you select">LIVE</span><span id="camtitle"></span></div><div class="camnote" id="camnote"></div></div>
           <a class="direct" id="direct" target="_blank" rel="noopener">Open source</a>
         </div>
       </div>
@@ -43,7 +43,10 @@
   </div>
 
   <section class="panel forecast" id="piratecastPanel" aria-label="PirateCast forecast">
-    <div class="pchead"><h3>PirateCast</h3><p id="pcReadout" class="pcreadout" aria-live="polite"></p></div>
+    <div class="pchead"><h3>PirateCast</h3><span id="dayLabel" class="daylabel"></span></div>
+    <div id="dayGraph" class="daygraph-wrap"></div>
+    <p class="legend dg-legend"><span class="sw g"></span>7+ <span class="sw a"></span>5–6.9 <span class="sw r"></span>&lt;5 <span class="sw best"></span>Best · faded = after dark</p>
+    <p id="pcReadout" class="pcreadout" aria-live="polite"></p>
     <div id="piratecast" class="piratecast" role="group" aria-label="Hourly Pirate Score — tap an hour"></div>
     <p class="legend"><span class="sw best"></span>Best window <span class="sw night"></span>After dark</p>
   </section>
@@ -75,5 +78,6 @@
   </footer>
 </main>
 
+<div id="timedock" class="timedock" role="group" aria-label="Forecast time"></div>
 <div class="camonly-bar"><span id="camOnlyName"></span><button id="exitCamOnly" class="pill">Exit cam only</button></div>
 </body></html>

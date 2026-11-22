@@ -19,6 +19,16 @@ const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
 export const angDiff = (a, b) => { const d = Math.abs(((a - b) % 360 + 540) % 360 - 180); return d; };
 const inArc = (deg, [from, to]) => from <= to ? deg >= from && deg <= to : deg >= from || deg <= to;
 
+/** Wind relative to the beach: 'offshore' | 'cross-shore' | 'onshore' | 'calm', or null when the
+ *  spot's orientation isn't configured. Wind direction is meteorological (where it blows FROM). */
+export function windRelation(shoreFacingDeg, wind) {
+  if (!wind || !Number.isFinite(wind.mph)) return null;
+  if (wind.mph < 3) return 'calm';
+  if (shoreFacingDeg == null || !Number.isFinite(wind.fromDeg)) return null;
+  const d = angDiff(wind.fromDeg, shoreFacingDeg + 180); // 0 = straight offshore
+  return d <= 45 ? 'offshore' : d >= 135 ? 'onshore' : 'cross-shore';
+}
+
 export function tideFactor(cfg, tide) {
   if (!cfg || !tide) return null;
   const [a, b] = cfg.idealPhase, p = tide.phase;
