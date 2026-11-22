@@ -42,9 +42,9 @@ export function createWindMap(section, { onSelectSpot }) {
     map = L.map(mapEl, {
       center: VIEW.center, zoom: VIEW.zoom, minZoom: VIEW.minZoom, maxZoom: VIEW.maxZoom,
       zoomControl: false, scrollWheelZoom: false, // never hijack page scrolling
-      dragging: !coarse, touchZoom: !coarse, tap: false, attributionControl: true,
+      dragging: !coarse, touchZoom: !coarse, tap: false,
+      attributionControl: false, // credits are one line under the map (index.html .wm-credits), never under the dock
     });
-    map.attributionControl.setPrefix('<a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet</a>');
     L.control.zoom({ position: 'bottomright' }).addTo(map);
     L.tileLayer(BASE.url, BASE.options).addTo(map);
     L.tileLayer(DETAIL.url, DETAIL.options).addTo(map);
@@ -63,8 +63,8 @@ export function createWindMap(section, { onSelectSpot }) {
     const btn = L.DomUtil.create('button', 'wm-lock', mapEl);
     btn.type = 'button';
     const set = on => {
-      if (on) { map.dragging.enable(); map.touchZoom.enable(); mapEl.classList.add('unlocked'); btn.textContent = 'Done'; }
-      else { map.dragging.disable(); map.touchZoom.disable(); mapEl.classList.remove('unlocked'); btn.textContent = 'Tap to pan & zoom'; }
+      if (on) { map.dragging.enable(); map.touchZoom.enable(); mapEl.classList.add('unlocked'); btn.textContent = 'Done'; btn.setAttribute('aria-label', 'Lock the map so swipes scroll the page'); }
+      else { map.dragging.disable(); map.touchZoom.disable(); mapEl.classList.remove('unlocked'); btn.textContent = 'Pan'; btn.setAttribute('aria-label', 'Unlock the map to pan and pinch-zoom'); }
     };
     L.DomEvent.disableClickPropagation(btn);
     btn.addEventListener('click', () => set(!mapEl.classList.contains('unlocked')));
@@ -91,12 +91,9 @@ export function createWindMap(section, { onSelectSpot }) {
     particles.setField(createSpotField(pts), animate);
     // captions
     const sel = pts.find(p => p.id === spotId);
-    const src = pts.length ? (pts.every(p => p.source === 'obs') ? 'NOAA observed' : pts.every(p => p.source === 'fcst') ? 'NWS forecast' : 'NOAA observed + NWS forecast') : '';
     timeEl.textContent = label;
     const spot = spots.find(s => s.id === spotId);
-    infoEl.innerHTML = pts.length
-      ? `${sel ? `<b>${esc(spot.name)}</b> ${compass(sel.fromDeg)} ${Math.round(sel.mph)} mph · ` : ''}${src} wind at ${pts.length} Pirate View spot${pts.length > 1 ? 's' : ''}`
-      : 'Wind data temporarily unavailable';
+    infoEl.textContent = sel ? `${spot.name} · ${compass(sel.fromDeg)} ${Math.round(sel.mph)} mph` : pts.length ? '' : 'Wind unavailable';
   }
 
   return {

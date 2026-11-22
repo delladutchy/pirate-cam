@@ -1,11 +1,19 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#0a0d10"><title>Pirate View — Delaware skim cams &amp; conditions</title>
+<meta name="theme-color" content="#0a0d10">
+<meta name="application-name" content="Pirate View">
+<meta name="apple-mobile-web-app-title" content="Pirate View">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icons/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/icons/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" sizes="180x180"><title>Pirate View — Delaware skim cams &amp; conditions</title>
 <meta name="description" content="Pirate View — Live Delaware skim cams, tides, wind and skimboarding conditions.">
 <meta property="og:title" content="Pirate View"><meta property="og:description" content="Pirate View — Live Delaware skim cams, tides, wind and skimboarding conditions."><meta property="og:type" content="website">
 <meta name="twitter:card" content="summary">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%23000'/%3E%3Cg stroke='%23fff' stroke-width='9' stroke-linecap='round'%3E%3Cline x1='16' y1='62' x2='84' y2='94'/%3E%3Cline x1='84' y1='62' x2='16' y2='94'/%3E%3C/g%3E%3Cpath fill='%23fff' d='M50 8c-19 0-32 13-32 30 0 10 5 17 11 21v10c0 3 2 5 5 5h32c3 0 5-2 5-5V59c6-4 11-11 11-21C82 21 69 8 50 8z'/%3E%3Ccircle cx='38' cy='40' r='8'/%3E%3Ccircle cx='62' cy='40' r='8'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://api.tidesandcurrents.noaa.gov" crossorigin>
 <link rel="preconnect" href="https://api.weather.gov" crossorigin>
 <link rel="preconnect" href="https://v.angelcam.com">
@@ -59,11 +67,9 @@
   </section>
 
   <section class="panel windmap" id="windmapPanel" aria-label="Wind map">
-    <div class="wmhead"><h3>Wind map</h3><span class="wm-time">Now</span></div>
-    <div class="wm-map" role="region" aria-label="Satellite map of the Delaware beaches with animated wind"></div>
-    <p class="wm-info"></p>
-    <p class="legend wm-legend"><span class="wm-key"></span>Particles move the way the wind blows · faster = stronger.
-      Spot-based: blended from the real wind at Pirate View spots, not a regional weather model.</p>
+    <div class="wmhead"><h3>Wind map</h3><span class="wm-info"></span><span class="wm-time">Now</span></div>
+    <div class="wm-map" role="region" aria-label="Satellite map of the Delaware beaches with animated wind. Wind is blended from the real NOAA and NWS wind at the Pirate View spots, not a regional weather model."></div>
+    <p class="wm-credits"><a href="https://s2maps.eu" target="_blank" rel="noopener">Sentinel-2 cloudless - https://s2maps.eu</a> by <a href="https://eox.at" target="_blank" rel="noopener">EOX IT Services GmbH</a> (Contains modified Copernicus Sentinel data 2016 &amp; 2017) · <a href="https://www.usgs.gov/programs/national-geospatial-program/national-map" target="_blank" rel="noopener">USGS</a> · Wind: NOAA/NWS at Pirate View spots</p>
   </section>
 
   <section class="panel detailpanel">

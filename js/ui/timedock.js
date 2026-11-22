@@ -92,7 +92,7 @@ export function createTimeDock(dock, { onPick, onDay, onNow, zone }) {
     onPick(null, { step: (e.shiftKey ? 1 : 0.25) * 3600e3 * (e.key === 'ArrowRight' ? 1 : -1) });
   });
 
-  // Visibility: one zone, from the top of PirateCast to the map's attribution line (its bottom edge).
+  // Visibility: one zone, from the top of PirateCast to the bottom edge of the wind map.
   // The dock is shown only while the strip it occupies lies over that zone, so it is gone
   // before the text under the map, the details and the footer reach it. 28 px of
   // hysteresis stops it flickering at the edges; it stays put while being dragged.
@@ -105,9 +105,8 @@ export function createTimeDock(dock, { onPick, onDay, onNow, zone }) {
     const band = vh - dockH - 16;                     // top of the strip the dock covers
     const tr = zone.top.getBoundingClientRect(), br = zone.bottom.getBoundingClientRect();
     const laidOut = tr.height > 0 && br.height > 0 && !document.body.classList.contains('cam-only'); // hidden while loading / cam-only
-    // stop at the map's attribution line (credits must never sit under the dock), else the map's bottom
-    const attr = zone.bottom.querySelector('.leaflet-control-attribution');
-    const top = tr.top, bottom = attr ? attr.getBoundingClientRect().top : br.bottom;
+    // stop at the map's bottom edge: the credits line and all text sit below it, so they never meet the dock
+    const top = tr.top, bottom = br.bottom;
     const wantShow = laidOut && top < band - HYST && bottom > vh + HYST;
     const mustHide = !laidOut || top > band || bottom < vh + 4;
     const next = drag?.active ? shown : shown ? !mustHide : wantShow;
