@@ -5,7 +5,7 @@
 import { time } from './format.js';
 import { band } from './daygraph.js';
 
-export function createTimeDock(dock, { onPick, onDay, onNow, watch }) {
+export function createTimeDock(dock, { onPick, onDay, onNow, zone }) {
   dock.innerHTML = `
     <div class="td-row">
       <div class="td-days" role="tablist" aria-label="Forecast day"></div>
@@ -61,28 +61,62 @@ export function createTimeDock(dock, { onPick, onDay, onNow, watch }) {
     const t = ctx.day.start.getTime() + Math.min(1, Math.max(0, (clientX - r.left) / r.width)) * ctx.span;
     return new Date(Math.min(ctx.maxT, Math.max(ctx.minT, Math.round(t / 9e5) * 9e5)));
   };
+  // Mouse: drag at once. Touch/pen: a tap sets the time, a horizontal drag scrubs, and a
+  // vertical swipe is left to the page (touch-action: pan-y) so scrolling never moves the slider.
   slider.addEventListener('pointerdown', e => {
     if (!ctx) return;
-    drag = e.pointerId; slider.setPointerCapture(e.pointerId); dock.classList.add('dragging');
+    drag = { id: e.pointerId, x0: e.clientX, y0: e.clientY, active: e.pointerType === 'mouse' };
+    if (drag.active) { slider.setPointerCapture(e.pointerId); dock.classList.add('dragging'); onPick(timeAt(e.clientX), { dragging: true }); }
+  });
+  slider.addEventListener('pointermove', e => {
+    if (!drag || drag.id !== e.pointerId) return;
+    if (!drag.active) {
+      const dx = Math.abs(e.clientX - drag.x0), dy = Math.abs(e.clientY - drag.y0);
+      if (dx > 6 && dx > dy) { drag.active = true; slider.setPointerCapture(e.pointerId); dock.classList.add('dragging'); }
+      else return;
+    }
+    e.preventDefault();
     onPick(timeAt(e.clientX), { dragging: true });
   });
-  slider.addEventListener('pointermove', e => { if (drag === e.pointerId) { e.preventDefault(); onPick(timeAt(e.clientX), { dragging: true }); } });
-  const end = e => { if (drag === e.pointerId) { drag = null; dock.classList.remove('dragging'); onPick(timeAt(e.clientX), { dragging: false }); } };
+  const end = e => {
+    if (!drag || drag.id !== e.pointerId) return;
+    const wasDrag = drag.active, moved = Math.abs(e.clientY - drag.y0) > 10;
+    drag = null; dock.classList.remove('dragging');
+    if (wasDrag || !moved) onPick(timeAt(e.clientX), { dragging: false }); // tap or end of a drag
+  };
   slider.addEventListener('pointerup', end);
-  slider.addEventListener('pointercancel', () => { drag = null; dock.classList.remove('dragging'); });
+  slider.addEventListener('pointercancel', () => { drag = null; dock.classList.remove('dragging'); }); // page took the gesture (scroll)
   slider.addEventListener('keydown', e => {
     if (!['ArrowLeft', 'ArrowRight'].includes(e.key)) return;
     e.preventDefault();
     onPick(null, { step: (e.shiftKey ? 1 : 0.25) * 3600e3 * (e.key === 'ArrowRight' ? 1 : -1) });
   });
 
-  // visible only while the forecast area is on screen
-  const seen = new Set();
-  const io = new IntersectionObserver(es => {
-    for (const e of es) e.isIntersecting ? seen.add(e.target) : seen.delete(e.target);
-    document.body.classList.toggle('dock-on', seen.size > 0);
-  }, { rootMargin: '0px 0px -110px 0px' }); // ignore the strip the dock itself covers
-  watch.forEach(el => io.observe(el));
+  // Visibility: one zone, from the top of PirateCast to the map's attribution line (its bottom edge).
+  // The dock is shown only while the strip it occupies lies over that zone, so it is gone
+  // before the text under the map, the details and the footer reach it. 28 px of
+  // hysteresis stops it flickering at the edges; it stays put while being dragged.
+  const HYST = 28;
+  let shown = false, raf = 0;
+  function check() {
+    raf = 0;
+    if (!zone.top || !zone.bottom) return;
+    const vh = window.innerHeight, dockH = dock.offsetHeight || 96;
+    const band = vh - dockH - 16;                     // top of the strip the dock covers
+    const tr = zone.top.getBoundingClientRect(), br = zone.bottom.getBoundingClientRect();
+    const laidOut = tr.height > 0 && br.height > 0 && !document.body.classList.contains('cam-only'); // hidden while loading / cam-only
+    // stop at the map's attribution line (credits must never sit under the dock), else the map's bottom
+    const attr = zone.bottom.querySelector('.leaflet-control-attribution');
+    const top = tr.top, bottom = attr ? attr.getBoundingClientRect().top : br.bottom;
+    const wantShow = laidOut && top < band - HYST && bottom > vh + HYST;
+    const mustHide = !laidOut || top > band || bottom < vh + 4;
+    const next = drag?.active ? shown : shown ? !mustHide : wantShow;
+    if (next !== shown) { shown = next; document.body.classList.toggle('dock-on', shown); }
+  }
+  const schedule = () => { if (!raf) raf = requestAnimationFrame(check); };
+  window.addEventListener('scroll', schedule, { passive: true });
+  window.addEventListener('resize', schedule);
+  schedule();
 
-  return { render, place, get dragging() { return drag != null; } };
+  return { render, place, refresh: schedule, get dragging() { return !!drag?.active; } };
 }

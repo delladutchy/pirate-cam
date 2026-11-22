@@ -169,7 +169,7 @@ const dayGraph = createDayGraph($('#dayGraph'), { onPick: (t, o = {}) => setTime
 const timeDock = createTimeDock($('#timedock'), {
   onPick: (t, o = {}) => setTime(t, { from: 'dock', dragging: !!o.dragging, step: o.step || 0 }),
   onDay: pickDay, onNow: () => setTime(null, { from: 'now' }),
-  watch: [$('#piratecastPanel'), $('.tidepanel'), $('#windmapPanel')],
+  zone: { top: $('#piratecastPanel'), bottom: $('#windmapPanel .wm-map') },
 });
 
 function updateMap() {
@@ -196,6 +196,7 @@ function renderConditions(spotSwitch = false) {
     $('#window').hidden = true;
     for (const id of ['#tideSummary', '#tideGraph', '#piratecast', '#pcReadout', '#details']) $(id).innerHTML = '';
     tideGraph.reset();
+    timeDock.refresh();
     return;
   }
   if (state.selT && state.selT < r.now) state.selT = null;
@@ -209,6 +210,7 @@ function renderConditions(spotSwitch = false) {
   const missing = Object.entries(r.status).filter(([, ok]) => !ok).map(([k]) => ({ tide: 'tides', wind: 'observed wind', buoy: 'wave buoy', forecast: 'forecast' }[k]));
   $('#sourceNote').textContent = missing.length ? `Temporarily unavailable: ${missing.join(', ')}.` : '';
   if (spotSwitch) fadeIn($('.rail'), $('#piratecastPanel'), $('.tidepanel'));
+  timeDock.refresh(); // layout changed (panels shown): re-check whether the dock belongs on screen
 }
 
 let resizeT;
@@ -222,6 +224,7 @@ $('#window').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key =
 // ---------- cam only ----------
 function setCamOnly(on) {
   document.body.classList.toggle('cam-only', on);
+  timeDock.refresh();
   prefs.camOnly = on;
   $('#camOnlyBtn').setAttribute('aria-pressed', on);
 }
