@@ -84,22 +84,29 @@ h1{font-family:'Pirata One',Georgia,serif;font-size:34px;letter-spacing:.5px}
 .big{font-size:52px;font-weight:600;letter-spacing:-2px;line-height:1;font-variant-numeric:tabular-nums}
 .big.small{font-size:22px;letter-spacing:-.3px;font-weight:500}
 .lbl{font-size:12px;font-weight:700;letter-spacing:1px;display:inline-flex;align-items:center;gap:6px}
-.facts{display:grid;grid-template-columns:1fr 1fr;gap:12px 18px;margin-top:14px}
+.facts{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px 18px;margin-top:14px}
 .f{display:flex;flex-direction:column;gap:3px;min-width:0}
 .fk{font-size:10px;letter-spacing:.9px;text-transform:uppercase;color:var(--muted)}
 .fv{font-size:15px;font-weight:600;white-space:nowrap;font-variant-numeric:tabular-nums;display:inline-flex;align-items:center;gap:8px}
-.fv>span{display:flex;flex-direction:column;gap:2px}
-.fs{font-size:11px;font-weight:500;color:var(--muted)}
+.fv>span{display:flex;flex-direction:column;gap:2px;min-width:0}
+.f{min-width:0}
+.fs{font-size:11px;font-weight:500;color:var(--muted);white-space:normal;line-height:1.3}
 .fwind[data-rel=offshore] .fs{color:var(--sg)}.fwind[data-rel=onshore] .fs{color:var(--sr)}.fwind[data-rel=cross-shore] .fs{color:var(--sa)}
 .wcompass{width:34px;height:34px;flex:0 0 34px}
 .wc-ring{fill:none;stroke:var(--line);stroke-width:1.5}
 .wc-n{fill:var(--faint);font-size:6.5px;font-weight:600}
 .wc-arrow{fill:var(--accent);transform-box:view-box;transform-origin:18px 18px;transition:transform var(--t) cubic-bezier(.3,.7,.3,1)}
-.explain{display:flex;flex-wrap:wrap;gap:4px 12px;margin:12px 0 0;font-size:12px;color:var(--muted)}
+.explain{margin:12px 0 0;font-size:12px;color:var(--muted)}
 .explain .pos{color:#a9d9bf}.explain .neg{color:#d5b48f}
 .mode{color:var(--muted)}.mode.live{color:var(--firing)}
 .kicker .when{margin-right:auto}
 .warrow{width:15px;height:15px;fill:var(--accent);transition:transform var(--t) cubic-bezier(.3,.7,.3,1);flex:0 0 15px}
+.conf{font-size:10px;letter-spacing:.4px;color:var(--faint);border:1px solid var(--line);border-radius:999px;padding:2px 7px;margin-left:auto}
+.conf[data-c=high]{color:#9fc9b4}.conf[data-c=low]{color:#c9a98f}.conf:empty{display:none}
+.rec{margin-top:10px;font-size:13px;color:var(--muted);line-height:1.4}
+.rec .rec-h{color:var(--text);font-weight:650}
+.rec.rec-go .rec-h,.rec.rec-prime .rec-h{color:var(--firing)}.rec.rec-wait .rec-h,.rec.rec-later .rec-h{color:var(--good)}
+.rec.rec-nodata .rec-h,.rec.rec-none .rec-h{color:var(--muted)}
 .mid{font-size:20px;font-weight:600;letter-spacing:-.3px;line-height:1.2}
 .wday{font-size:12px;color:var(--muted);margin-bottom:2px}
 .wscore{display:flex;align-items:baseline;gap:8px;margin-top:8px}
@@ -187,7 +194,9 @@ h1{font-family:'Pirata One',Georgia,serif;font-size:34px;letter-spacing:.5px}
 .dg-past{fill:rgba(10,13,16,.72)}
 .dg-nodata{fill:rgba(10,13,16,.6)}
 .dg-note{fill:var(--faint);font-size:11px;letter-spacing:.5px}
-.dg-guide{stroke:var(--line);stroke-width:1;stroke-dasharray:2 4}
+.dg-guide{stroke:#1c232a;stroke-width:1}
+.dg-guide.major{stroke:var(--line);stroke-dasharray:2 4}
+.dg-tier{fill:#4b5660;font-size:8.5px;letter-spacing:.8px;font-weight:600;pointer-events:none}
 .dg-axis{fill:var(--faint);font-size:10.5px;font-variant-numeric:tabular-nums}
 .dg-best{fill:var(--best)}
 .dg-bestlbl{fill:var(--firing);font-size:9.5px;letter-spacing:1px}
@@ -214,9 +223,28 @@ h1{font-family:'Pirata One',Georgia,serif;font-size:34px;letter-spacing:.5px}
   transition:opacity 200ms ease,transform 220ms cubic-bezier(.3,.7,.3,1),visibility 0s linear 220ms}
 body.dock-on .timedock{opacity:1;visibility:visible;pointer-events:auto;transform:translate(-50%,0);transition:opacity 200ms ease,transform 220ms cubic-bezier(.3,.7,.3,1),visibility 0s}
 body.cam-only .timedock{display:none}
-.td-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:22px}
+.td-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+/* conditions strip: the essentials stay visible while scrubbing */
+.td-cond{display:grid;grid-template-columns:auto 1.35fr 1fr 1fr .9fr;gap:2px 10px;align-items:center;padding:6px 2px 4px;border-top:1px solid #1d242c}
+.tc{display:flex;flex-direction:column;min-width:0;line-height:1.15}
+.tc-v{font-size:15px;font-weight:650;white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--text)}
+.tc-s{font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:.2px}
+.tc-score .tc-v{font-size:20px;letter-spacing:-.5px}
+.tc-score .tc-s{font-weight:700;letter-spacing:.6px}
+.tc-score.tone-firing .tc-s{color:var(--firing)}.tc-score.tone-great .tc-s{color:var(--great)}.tc-score.tone-good .tc-s{color:var(--good)}
+.tc-score.tone-ok .tc-s{color:var(--ok)}.tc-score.tone-maybe .tc-s{color:var(--maybe)}.tc-score.tone-poor .tc-s{color:var(--poor)}
+.tc-wind{flex-direction:row;align-items:center;gap:6px}
+.tc-wind>span{display:flex;flex-direction:column;min-width:0}
+.td-warrow{width:22px;height:22px;flex:0 0 22px;fill:var(--accent);transition:transform var(--t) cubic-bezier(.3,.7,.3,1)}
+.tc-wind[data-rel=offshore] .tc-s{color:var(--sg)}.tc-wind[data-rel=onshore] .tc-s{color:var(--sr)}.tc-wind[data-rel=cross-shore] .tc-s{color:var(--sa)}
+.td-rec{margin:2px 2px 20px;font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:15px}
+.td-rec b{color:var(--text);font-weight:600}
+.td-rec.rec-go b,.td-rec.rec-prime b{color:var(--firing)}.td-rec.rec-wait b,.td-rec.rec-later b{color:var(--good)}
+@media(max-width:400px){.td-cond{grid-template-columns:auto 1.4fr 1fr 1fr;gap:2px 8px}.tc-temp{display:none}.tc-v{font-size:14px}.tc-score .tc-v{font-size:18px}}
 .td-days{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none}
-.td-days button,.td-now{appearance:none;border:1px solid transparent;background:none;color:var(--muted);border-radius:999px;padding:7px 11px;font-size:12px;cursor:pointer;white-space:nowrap;min-height:34px}
+.td-days button,.td-now{appearance:none;border:1px solid transparent;background:none;color:var(--muted);border-radius:999px;padding:6px 10px;font-size:12px;cursor:pointer;white-space:nowrap;min-height:34px}
+.td-days button{display:inline-flex;align-items:baseline;gap:5px;flex:0 0 auto}
+.td-days .dv{font-size:11px;font-weight:650;font-variant-numeric:tabular-nums}.td-days .dv.na{color:var(--faint)}
 .td-days button.on{background:var(--panel2);border-color:var(--line);color:var(--text)}
 .td-days button:disabled{opacity:.35;cursor:default}
 .td-now{border-color:var(--line);color:var(--accent);font-weight:600;letter-spacing:.5px;text-transform:uppercase;font-size:11px}
@@ -228,6 +256,19 @@ body.cam-only .timedock{display:none}
 .timedock.dragging .td-handle{transform:scale(1.15)}
 .td-bubble{position:absolute;bottom:28px;left:50%;white-space:nowrap;font-size:12px;font-weight:600;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:3px 8px;font-variant-numeric:tabular-nums;pointer-events:none}
 .td-bubble b{margin-left:4px}
+
+/* Fixed-height lines in the score card + readout: the selected time changes their text while
+   scrubbing, and iPhone Safari has no scroll anchoring — so nothing above the graph may change
+   height, or the page would jump under the finger. */
+.score .kicker{height:26px;min-height:26px}
+.scoreline{flex-wrap:nowrap}
+.scoreline .lbl{white-space:nowrap}
+.score .rec{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;height:calc(2 * 1.4em)}
+.score .explain{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;height:calc(2 * 1.45em);line-height:1.45}
+.score .explain span{margin-right:10px}
+.facts .fs{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;height:calc(2 * 1.3em)}
+.facts .fv{min-height:34px}
+.pcreadout{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;height:1.45em;line-height:1.45}
 
 /* tide scrubbing */
 .tidegraph:focus-visible{outline:1px solid var(--accent);outline-offset:4px;border-radius:4px}

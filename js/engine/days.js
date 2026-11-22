@@ -23,16 +23,17 @@ export const dayEnd = start => dayStart(new Date(start.getTime() + 36 * 3600e3),
 const wk = new Intl.DateTimeFormat('en-US', { timeZone: TZ, weekday: 'short' });
 const md = new Intl.DateTimeFormat('en-US', { timeZone: TZ, month: 'short', day: 'numeric' });
 
-/** Forecast days: today + the next two, each with the span that actually has scored data. */
-export function forecastDays(timeline, now) {
+/** Forecast days: today + up to six more, each with the span that actually has scored data. */
+export function forecastDays(timeline, now, count = 7) {
   const out = [];
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < count; i++) {
     const start = dayStart(now, i), end = dayEnd(start);
     const inDay = timeline.filter(s => s.t >= start && s.t < end);
     const scored = inDay.filter(s => s.score != null);
     out.push({
       index: i, start, end,
-      label: i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : wk.format(start),
+      label: i === 0 ? 'Today' : wk.format(start),
+      long: i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : wk.format(start),
       sub: md.format(start),
       dataFrom: inDay[0]?.t ?? null, dataTo: inDay.at(-1)?.t ?? null,
       hasScores: scored.length > 0,

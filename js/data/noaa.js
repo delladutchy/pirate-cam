@@ -10,10 +10,11 @@ const ymd = d => d.toISOString().slice(0, 10).replaceAll('-', '');
 const coopsTime = s => new Date(s.replace(' ', 'T') + ':00Z'); // time_zone=gmt
 const fresh = (t, maxAgeMs) => t && Date.now() - t.getTime() < maxAgeMs;
 
-/** NOAA CO-OPS tide high/low predictions, yesterday → +2 days (curve needs the events either side). */
+/** NOAA CO-OPS tide high/low predictions, yesterday → +8 days (curve needs the events either side). */
 export async function tideEvents(station) {
   const begin = new Date(Date.now() - 864e5);
-  const url = `${COOPS}&product=predictions&interval=hilo&datum=MLLW&station=${station}&begin_date=${ymd(begin)}&range=96`;
+  // yesterday → +8 days: covers the 7-day timeline with the hi/lo events either side
+  const url = `${COOPS}&product=predictions&interval=hilo&datum=MLLW&station=${station}&begin_date=${ymd(begin)}&range=216`;
   const data = await getJSON(url, { ttlMs: 6 * HOUR });
   return (data.predictions || []).map(p => ({ t: coopsTime(p.t), v: parseFloat(p.v), type: p.type }));
 }

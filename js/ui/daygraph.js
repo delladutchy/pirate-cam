@@ -21,24 +21,26 @@ export function createDayGraph(el, { onPick }) {
     const pts = cond.timeline.filter(s => s.t >= day.start && s.t < day.end);
     const nowMs = cond.now.getTime();
 
-    let svg = `<svg class="daygraph" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="slider" tabindex="0" aria-label="Pirate Score through the day — drag to choose a time">`;
+    let svg = `<svg class="daygraph" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="slider" tabindex="0" aria-label="Pirate Score through the day, 0 to 10 — drag or use arrow keys to choose a time">`;
     // night everywhere, daylight lifted on top
     svg += `<rect x="${padL}" y="${top}" width="${W - padL - padR}" height="${base - top}" class="dg-night"/>`;
     for (const r of cond.daylight) {
       const a = Math.max(t0, r.sunrise.getTime()), b = Math.min(t1, r.sunset.getTime());
       if (b > a) svg += `<rect x="${X(a)}" y="${top}" width="${X(b) - X(a)}" height="${base - top}" class="dg-day"/>`;
     }
-    // threshold guides at 5 and 7
-    for (const v of [5, 7]) svg += `<line x1="${padL}" x2="${W - padR}" y1="${Y(v)}" y2="${Y(v)}" class="dg-guide"/><text x="${padL - 5}" y="${Y(v) + 3.5}" class="dg-axis" text-anchor="end">${v}</text>`;
-    svg += `<text x="${padL - 5}" y="${Y(10) + 3.5}" class="dg-axis" text-anchor="end">10</text>`;
+    // rating tiers from the existing score labels (score.js LABELS): faint lines + names in each band
+    for (const v of [5, 6, 7, 8, 9]) svg += `<line x1="${padL}" x2="${W - padR}" y1="${Y(v)}" y2="${Y(v)}" class="dg-guide${v === 5 || v === 7 ? ' major' : ''}"/>`;
+    for (const v of [0, 5, 7, 10]) svg += `<text x="${padL - 5}" y="${Y(v) + 3.5}" class="dg-axis" text-anchor="end">${v}</text>`;
+    const tiers = [[0, 5, 'POOR'], [5, 6, 'MAYBE'], [6, 7, 'DECENT'], [7, 8, 'GOOD'], [8, 9, 'VERY GOOD'], [9, 10, 'FIRING']];
+    for (const [lo, hi, name] of tiers) svg += `<text x="${W - padR - 4}" y="${(Y(lo) + Y(hi)) / 2 + 3}" class="dg-tier" text-anchor="end">${name}</text>`;
     // past (today) and no-data spans
     if (nowMs > t0) svg += `<rect x="${padL}" y="${top}" width="${X(Math.min(nowMs, t1)) - padL}" height="${base - top}" class="dg-past"/>` + (X(Math.min(nowMs, t1)) - padL > 40 ? `<text x="${(padL + X(Math.min(nowMs, t1))) / 2}" y="${(top + base) / 2}" class="dg-note" text-anchor="middle">Past</text>` : '');
     const lastScored = [...pts].reverse().find(s => s.score != null);
     if (lastScored && lastScored.t.getTime() + 15 * 60e3 < t1) {
       const a = X(lastScored.t.getTime() + 15 * 60e3);
-      svg += `<rect x="${a}" y="${top}" width="${W - padR - a}" height="${base - top}" class="dg-nodata"/>` + (W - padR - a > 60 ? `<text x="${(a + W - padR) / 2}" y="${(top + base) / 2}" class="dg-note" text-anchor="middle">No forecast</text>` : '');
+      svg += `<rect x="${a}" y="${top}" width="${W - padR - a}" height="${base - top}" class="dg-nodata"/>` + (W - padR - a > 60 ? `<text x="${(a + W - padR) / 2}" y="${(top + base) / 2}" class="dg-note" text-anchor="middle">Not enough data</text>` : '');
     }
-    if (!pts.some(s => s.score != null)) svg += `<text x="${W / 2}" y="${(top + base) / 2}" class="dg-note" text-anchor="middle">${cond.score.reason === 'not-configured' ? 'Not rated yet — skim profile not set up' : 'No scored forecast for this day'}</text>`;
+    if (!pts.some(s => s.score != null)) svg += `<text x="${W / 2}" y="${(top + base) / 2}" class="dg-note" text-anchor="middle">${cond.score.reason === 'not-configured' ? 'Not rated yet — skim profile not set up' : 'Not enough data for a score this day'}</text>`;
     // best window of this day
     const w = cond.dayWindows?.[day.index];
     if (w && w.start) {

@@ -21,7 +21,7 @@ const REL = { offshore: 'Offshore', 'cross-shore': 'Cross-shore', onshore: 'Onsh
 export function facts(s) {
   const out = {};
   if (s.waves && Number.isFinite(s.waves.ft)) out.waves = `${s.waves.ft.toFixed(1)}′${s.waves.periodS ? ` @ ${Math.round(s.waves.periodS)}s` : ''}`;
-  if (s.wind && Number.isFinite(s.wind.mph)) out.wind = `${compass(s.wind.fromDeg)} ${Math.round(s.wind.mph)} mph`.trim();
+  if (s.wind && Number.isFinite(s.wind.mph)) out.wind = s.wind.mph < 1 ? 'Calm' : `${compass(s.wind.fromDeg)} ${Math.round(s.wind.mph)} mph`.trim();
   if (s.tide) out.tide = `${s.tide.height.toFixed(1)}′ ${s.tide.rising ? '↑' : '↓'}`;
   return out;
 }
@@ -41,17 +41,20 @@ export function mountScore(el, cond) {
   el.innerHTML = `
     <div class="kicker"><span class="mode"></span><span class="when">Now</span><button type="button" class="backnow" hidden>Now</button></div>
     ${notCfg ? `<div class="big muted small">Not rated yet</div><div class="sub">${esc(cond.spot.name)}'s skim profile hasn't been set up yet.</div>`
-    : `<div class="scoreline"><span class="big num">–</span><span class="lbl"><i></i><span class="lbltxt"></span></span></div>`}
+    : `<div class="scoreline"><span class="big num" role="img" aria-label="Pirate Score">–</span><span class="lbl"><i></i><span class="lbltxt"></span></span><span class="conf"></span></div>`}
+    <div class="rec"><b class="rec-h"></b> <span class="rec-s"></span></div>
     <div class="facts">
       <div class="f fwind"><span class="fk">Wind</span><span class="fv">${COMPASS}<span><span data-f="wind">–</span><span class="fs" data-f="windsub"></span></span></span></div>
       <div class="f"><span class="fk">Waves</span><span class="fv"><span><span data-f="waves">–</span><span class="fs" data-f="wavesub"></span></span></span></div>
       <div class="f"><span class="fk">Tide</span><span class="fv"><span><span data-f="tide">–</span><span class="fs" data-f="tidesub"></span></span></span></div>
-      <div class="f"><span class="fk">Air</span><span class="fv"><span data-f="air">–</span></span></div>
+      <div class="f"><span class="fk">Temp</span><span class="fv"><span><span data-f="air">–</span><span class="fs" data-f="airsub"></span></span></span></div>
     </div>
     ${notCfg ? '' : '<p class="explain"></p><details class="why"><summary>Why this score?</summary><ul></ul><p class="fine">Pirate View estimate from NOAA data.</p></details>'}`;
 }
 
-export function updateScore(el, cond, s, { onBackToNow, label, isNow = s === cond.timeline[0], relation = null } = {}) {
+const CONF = { high: 'High confidence', medium: 'Medium confidence', low: 'Low confidence' };
+
+export function updateScore(el, cond, s, { onBackToNow, label, isNow = s === cond.timeline[0], relation = null, rec = null } = {}) {
   el.querySelector('.mode').textContent = isNow ? '● Live now' : 'Forecast · ';
   el.querySelector('.mode').classList.toggle('live', isNow);
   el.querySelector('.when').textContent = isNow ? '' : (label || whenLabel(s, cond));
@@ -69,7 +72,7 @@ export function updateScore(el, cond, s, { onBackToNow, label, isNow = s === con
   } else if (el.querySelector('.num')) {
     el.className = 'score tone-none';
     el.querySelector('.num').textContent = '–'; el.querySelector('.num').dataset.v = '';
-    el.querySelector('.lbltxt').textContent = 'No score';
+    el.querySelector('.lbltxt').textContent = 'Not enough data';
     el.querySelector('.why ul').innerHTML = '';
     el.querySelector('.explain').textContent = s.daylight === false ? '' : 'Not enough forecast data for a score at this time.';
   }
@@ -79,10 +82,20 @@ export function updateScore(el, cond, s, { onBackToNow, label, isNow = s === con
   const gust = s.wind && Number.isFinite(s.wind.gustMph) && s.wind.gustMph > s.wind.mph + 0.5 ? `gusts ${Math.round(s.wind.gustMph)}` : '';
   set('windsub', [gust, relation ? REL[relation] : ''].filter(Boolean).join(' · '));
   set('waves', f.waves || 'Not available');
-  set('wavesub', s.waves && Number.isFinite(s.waves.fromDeg) ? `from ${compass(s.waves.fromDeg)}` : '');
+  // offshore wave data is NOT the beach shorebreak: say where it comes from; the shorebreak line is an estimate
+  const energy = isNow && cond.current.energy ? `${cond.current.energy.label.toLowerCase()} shorebreak (est.)` : '';
+  set('wavesub', [s.waves ? (s.waves.source === 'obs' ? 'offshore buoy' : 'offshore fcst') : '', s.waves && Number.isFinite(s.waves.fromDeg) ? compass(s.waves.fromDeg) : '', energy].filter(Boolean).join(' · '));
   set('tide', f.tide || 'Not available');
-  set('tidesub', s.tide ? (s.tide.rising ? 'Rising' : 'Falling') : '');
+  set('tidesub', s.tide ? (s.tide.rising ? 'Rising · incoming' : 'Falling · outgoing') : '');
   set('air', Number.isFinite(s.airF) ? `${Math.round(s.airF)}°F` : 'Not available');
+  const water = isNow && cond.current.water ? `water ${Math.round(cond.current.water.f)}°` : '';
+  set('airsub', [water, Number.isFinite(s.pop) && s.pop >= 10 ? `rain ${Math.round(s.pop)}%` : '', s.daylight === false ? 'after dark' : ''].filter(Boolean).join(' · '));
+  const conf = el.querySelector('.conf');
+  if (conf) { conf.textContent = s.confidence ? CONF[s.confidence] : ''; conf.dataset.c = s.confidence || ''; }
+  const r = el.querySelector('.rec');
+  r.className = `rec rec-${rec?.kind || ''}`;
+  r.querySelector('.rec-h').textContent = rec?.head || '';
+  r.querySelector('.rec-s').textContent = rec?.sub || '';
   const rel = el.querySelector('.fwind'); rel.dataset.rel = relation || '';
   const arrow = el.querySelector('.wc-arrow');
   const hasDir = s.wind && Number.isFinite(s.wind.fromDeg) && s.wind.mph >= 1;

@@ -14,6 +14,9 @@ import { createDayGraph } from './ui/daygraph.js';
 import { createTimeDock } from './ui/timedock.js';
 import { forecastDays } from './engine/days.js';
 import { bestWindow, windRelation } from './engine/score.js';
+import { resolveSelection, daySummary } from './engine/timeline.js';
+import { recommendFor } from './engine/recommend.js';
+import { compass } from './ui/format.js';
 import { createWindMap } from './map/windmap.js';
 import { esc } from './ui/format.js';
 import { reducedMotion } from './ui/motion.js';
@@ -42,6 +45,7 @@ function select(spotId, cam) {
   state.spotId = spotId; state.cam = cam;
   history.replaceState(null, '', '#' + (cam === spot.cams[0] || !spot.cams.length ? spot.id : cam));
   if (camChanged) showCamera();
+  else if (spotChanged) showCaption(); // same camera, new spot (e.g. Conquest → Dewey): update the caption, never reload the player
   renderSpotNav();
   renderAngles();
   if (spotChanged) { renderConditions(true); ensureLoaded(spotId); updateMap(); }
@@ -51,10 +55,16 @@ window.addEventListener('hashchange', () => { const r = resolveHash(location.has
 
 // ---------- camera ----------
 function showCamera() {
-  const spot = spotById(state.spotId), c = state.cam && camBySlug[state.cam];
+  const c = state.cam && camBySlug[state.cam];
   const media = $('#media');
   if (!c) { media.innerHTML = '<div class="cam-fail"><p>Live camera temporarily unavailable</p></div>'; return; }
   renderMedia(media, c);
+  showCaption();
+}
+
+function showCaption() {
+  const spot = spotById(state.spotId), c = state.cam && camBySlug[state.cam];
+  if (!c) return;
   const nearby = !spot.cams.length;
   $('#camtitle').textContent = nearby ? spot.fullName : c.name;
   $('#camnote').textContent = nearby ? `No camera here yet · nearest live cam: ${c.name}` : c.note;
@@ -118,6 +128,7 @@ function current() { const r = state.results[state.spotId]; return r && r !== 'e
 function dayInfo(r) {
   if (!r._days) {
     r._days = forecastDays(r.timeline, r.now);
+    for (const d of r._days) d.preview = daySummary(r.timeline, d);
     r.dayWindows = r._days.map(d => {
       const ds = r.timeline.filter(s => s.t >= d.start && s.t < d.end && s.t >= r.now);
       return ds.length > 2 ? bestWindow(ds) : null;
@@ -130,16 +141,17 @@ const dayOf = (r, t) => dayInfo(r).find(d => t >= d.start && t < d.end) || dayIn
 let lastDayKey = '';
 function setTime(t, { from = '', dragging = false, step = 0 } = {}) {
   const r = current(); if (!r) return;
-  if (step) t = new Date((state.selT || r.now).getTime() + step);
-  const end = r.timeline.at(-1).t;
-  if (t && t > end) t = end;
-  if (t && t - r.now < 8 * 60e3) t = null; // within a few minutes of now → "Now"
+  t = resolveSelection({ t, step, current: state.selT, now: r.now, end: r.timeline.at(-1).t }); // null = live now
   state.selT = t;
   const s = sampleAt(r.timeline, t);
   const label = timeLabel(t, r);
   const tideNow = t && r.tide && r.tide.covers(t) ? r.tide.at(t) : s.tide;
   const shown = { ...s, tide: tideNow };
-  updateScore($('#score'), r, shown, { label, isNow: !t, relation: windRelation(r.spot.profile.shoreFacingDeg, s.wind), onBackToNow: () => setTime(null, { from: 'back' }) });
+  const relation = windRelation(r.spot.profile.shoreFacingDeg, s.wind);
+  const dayNow = dayOf(r, t || r.now);
+  const rec = recommendFor(r, s, t, r.dayWindows[dayNow.index]);
+  updateScore($('#score'), r, shown, { label, isNow: !t, relation, rec, onBackToNow: () => setTime(null, { from: 'back' }) });
+  timeDock.show(dockView(r, shown, t, relation, rec));
   renderTideSummary($('#tideSummary'), r, { t: t || r.now, tide: tideNow }, label);
   tideGraph.render(r, t || r.now, { instant: dragging });
   if (from !== 'cast') pirateCast.highlightTime(t || r.now, { scroll: dragging ? 'instant' : 'smooth' });
@@ -147,11 +159,34 @@ function setTime(t, { from = '', dragging = false, step = 0 } = {}) {
   const day = dayOf(r, t || r.now), key = r.spot.id + '|' + day.index + '|' + r.now.getTime();
   if (key !== lastDayKey) { lastDayKey = key; dayGraph.render(r, day, t); timeDock.render(r, dayInfo(r), day, t); }
   else { dayGraph.place(t, dragging); timeDock.place(t, dragging); }
-  $('#dayLabel').textContent = `${day.label} · ${day.sub}`;
+  $('#dayLabel').textContent = `${day.long} · ${day.sub}`;
   const f = facts(shown);
   $('#pcReadout').innerHTML = `<b>${label}</b>${s.score != null ? ` · <span class="tone-${s.tone}"><span class="lbl"><i></i>${s.score.toFixed(1)} ${s.label}</span></span>` : ''}${['waves', 'wind', 'tide'].filter(k => f[k]).map(k => ` · ${k[0].toUpperCase() + k.slice(1)} ${f[k]}`).join('')}${s.daylight ? '' : ' · <span class="muted">after dark</span>'}`;
   if (!dragging) updateMap();
   else scheduleMap();
+}
+
+const REL = { offshore: 'Offshore', 'cross-shore': 'Cross-shore', onshore: 'Onshore', calm: 'Calm' };
+/** Compact view model for the dock's conditions strip — the essentials visible while scrubbing. */
+function dockView(r, s, t, relation, rec) {
+  const w = s.wind, isNow = !t;
+  const gust = w && Number.isFinite(w.gustMph) && w.gustMph > w.mph + 0.5 ? `g${Math.round(w.gustMph)}` : '';
+  return {
+    score: s.score != null ? (s.confidence === 'low' ? '≈' : '') + s.score.toFixed(1) : '–', // ≈ = low confidence (inputs missing / far out)
+    label: s.score != null ? s.label : r.score.reason === 'not-configured' ? 'NOT RATED' : 'NO DATA',
+    tone: s.score != null ? s.tone : null,
+    wind: w && Number.isFinite(w.mph) ? (w.mph < 1 ? 'Calm' : `${compass(w.fromDeg)} ${Math.round(w.mph)}`) : '–',
+    windsub: [gust, relation ? REL[relation] : ''].filter(Boolean).join(' · ') || (w ? 'mph' : 'no wind data'),
+    windToDeg: w && Number.isFinite(w.fromDeg) && w.mph >= 1 ? w.fromDeg + 180 : NaN, // arrow shows where it blows TO
+    rel: relation,
+    tide: s.tide ? `${s.tide.height.toFixed(1)}′ ${s.tide.rising ? '↑' : '↓'}` : '–',
+    tidesub: s.tide ? (s.tide.rising ? 'incoming' : 'outgoing') : 'tide',
+    waves: s.waves && Number.isFinite(s.waves.ft) ? `${s.waves.ft.toFixed(1)}′` : '–',
+    wavesub: s.waves ? (s.waves.periodS ? `${Math.round(s.waves.periodS)}s · buoy` : 'offshore fcst') : 'waves',
+    temp: Number.isFinite(s.airF) ? `${Math.round(s.airF)}°` : '–',
+    tempsub: isNow && r.current.water ? `water ${Math.round(r.current.water.f)}°` : Number.isFinite(s.pop) && s.pop >= 10 ? `rain ${Math.round(s.pop)}%` : 'air',
+    rec: rec?.head, recSub: rec?.sub, recKind: rec?.kind,
+  };
 }
 
 function pickDay(i) {

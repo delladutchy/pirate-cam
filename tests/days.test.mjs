@@ -13,8 +13,10 @@ test('forecastDays: honest availability per day', () => {
   const tl = [];
   for (let t = now.getTime(); t < now.getTime() + 30 * 36e5; t += 9e5) tl.push({ t: new Date(t), score: 5 });
   const d = forecastDays(tl, now);
-  assert.deepEqual(d.map(x => x.label), ['Today', 'Tomorrow', 'Mon']);
-  assert.deepEqual(d.map(x => x.hasScores), [true, true, false]);
+  assert.equal(d.length, 7);
+  assert.deepEqual(d.map(x => x.label), ['Today', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
+  assert.equal(d[1].long, 'Tomorrow');
+  assert.deepEqual(d.map(x => x.hasScores), [true, true, false, false, false, false, false]); // no invented days
 });
 
 test('wind relation uses FROM direction against the beach orientation', () => {
