@@ -7,8 +7,20 @@ import { reducedMotion } from './motion.js';
 
 const DAY = d => d.toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'short' });
 
+/** Index of the hour cell nearest `t`, or -1 when `t` lies past the last hour PirateCast covers
+ *  (half an hour of slack, the same rounding the cells use). Pure: exported for tests. */
+export function cellIndexFor(hours, t) {
+  if (!hours.length) return -1;
+  if (!t) return 0;
+  const last = hours[hours.length - 1].t;
+  if (t - last > 30 * 60e3) return -1;
+  let best = 0, d = Infinity;
+  hours.forEach((s, i) => { const x = Math.abs(s.t - t); if (x < d) { d = x; best = i; } });
+  return best;
+}
+
 export function createPirateCast(el, { onSelect }) {
-  let cells = [], hours = [], selIdx = 0;
+  let cells = [], hours = [], selIdx = 0, endCell = null, beyond = false;
 
   function render(cond, selectedT) {
     hours = cond.hourly;
@@ -26,16 +38,25 @@ export function createPirateCast(el, { onSelect }) {
         <span class="n">${sc == null ? '–' : sc.toFixed(1)}</span>
         <span class="bar"><i style="height:${sc == null ? 0 : Math.max(6, sc * 10)}%"></i></span>
       </button>`;
-    }).join('');
+    }).join('') + (hours.length > 1 ? `<div class="pc-end" role="note">
+        <span class="t">Hourly ends</span><span class="e">${DAY(hours[hours.length - 1].t)} ${hour(hours[hours.length - 1].t)}</span><span class="h">Later: day graph &amp; time bar</span>
+      </div>` : '');
     cells = [...el.querySelectorAll('.pc')];
-    select(nearestIndex(selectedT), { scroll: 'instant', silent: true });
+    endCell = el.querySelector('.pc-end');
+    highlightTime(selectedT, { scroll: 'instant' });
   }
 
-  function nearestIndex(t) {
-    if (!t || !hours.length) return 0;
-    let best = 0, d = Infinity;
-    hours.forEach((s, i) => { const x = Math.abs(s.t - t); if (x < d) { d = x; best = i; } });
-    return best;
+  function setBeyond(on) {
+    beyond = on;
+    el.classList.toggle('beyond', on);
+    endCell?.classList.toggle('on', on);
+  }
+
+  function reveal(c, scroll) {
+    const box = el.getBoundingClientRect(), r = c.getBoundingClientRect();
+    if (r.left < box.left + 8 || r.right > box.right - 8) {
+      el.scrollTo({ left: el.scrollLeft + (r.left - box.left) - box.width / 2 + r.width / 2, behavior: scroll === 'smooth' && !reducedMotion() ? 'smooth' : 'auto' });
+    }
   }
 
   function select(i, { scroll = 'smooth', silent = false } = {}) {
@@ -43,11 +64,9 @@ export function createPirateCast(el, { onSelect }) {
     i = Math.max(0, Math.min(cells.length - 1, i));
     cells[selIdx]?.classList.remove('sel'); cells[selIdx]?.setAttribute('aria-pressed', 'false');
     selIdx = i;
+    setBeyond(false);
     cells[i].classList.add('sel'); cells[i].setAttribute('aria-pressed', 'true');
-    const c = cells[i], box = el.getBoundingClientRect(), r = c.getBoundingClientRect();
-    if (r.left < box.left + 8 || r.right > box.right - 8) {
-      el.scrollTo({ left: el.scrollLeft + (r.left - box.left) - box.width / 2 + r.width / 2, behavior: scroll === 'smooth' && !reducedMotion() ? 'smooth' : 'auto' });
-    }
+    reveal(cells[i], scroll);
     if (!silent) onSelect(hours[i], i);
   }
 
@@ -64,13 +83,21 @@ export function createPirateCast(el, { onSelect }) {
   });
   // keyboard
   el.addEventListener('keydown', e => {
-    if (e.key === 'ArrowRight') { e.preventDefault(); select(selIdx + 1); cells[selIdx].focus({ preventScroll: true }); }
-    if (e.key === 'ArrowLeft') { e.preventDefault(); select(selIdx - 1); cells[selIdx].focus({ preventScroll: true }); }
+    if (e.key === 'ArrowRight') { e.preventDefault(); if (beyond) return; select(selIdx + 1); cells[selIdx].focus({ preventScroll: true }); }
+    if (e.key === 'ArrowLeft') { e.preventDefault(); select(beyond ? cells.length - 1 : selIdx - 1); cells[selIdx].focus({ preventScroll: true }); }
   });
 
   /** Move the highlight to the hour nearest `t` without emitting a selection (used when
    *  another control — tide graph, best window, map — owns the change). */
-  function highlightTime(t, { scroll = 'smooth' } = {}) { select(nearestIndex(t), { scroll, silent: true }); }
+  function highlightTime(t, { scroll = 'smooth' } = {}) {
+    if (!cells.length) return;
+    const i = cellIndexFor(hours, t);
+    if (i >= 0) return select(i, { scroll, silent: true });
+    // past PirateCast's last hour: no hour cell may look selected — the end marker takes over
+    cells[selIdx]?.classList.remove('sel'); cells[selIdx]?.setAttribute('aria-pressed', 'false');
+    setBeyond(true);
+    if (endCell) reveal(endCell, scroll);
+  }
 
-  return { render, select, highlightTime, get selected() { return hours[selIdx]; } };
+  return { render, select, highlightTime, get selected() { return beyond ? null : hours[selIdx]; }, get beyond() { return beyond; } };
 }

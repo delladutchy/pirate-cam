@@ -53,13 +53,24 @@ function parseDuration(iso) { // PT1H, P1DT6H
   return ((+m[1] || 0) * 24 + (+m[2] || 0)) * HOUR + (+m[3] || 0) * MIN;
 }
 
-function series(prop, conv = v => v) {
+export function series(prop, conv = v => v) {
   if (!prop || !Array.isArray(prop.values)) return [];
   return prop.values.filter(x => x.value != null).map(x => {
     const [start, dur] = x.validTime.split('/');
     const s = new Date(start).getTime();
     return { s, e: s + parseDuration(dur), v: conv(x.value) };
   });
+}
+
+/**
+ * NWS marks hours with no wave forecast as one 0 m value stretched over days (e.g. a single
+ * "0" for P4DT19H at the end of the grid). That is a placeholder, not flat water, so a zero
+ * lasting a day or more is dropped and those hours read as "Not available". Genuine calm
+ * forecasts (or zero values over normal few-hour blocks) are kept.
+ */
+export const WAVE_PLACEHOLDER_MS = 24 * 3600e3;
+export function dropWavePlaceholders(ser) {
+  return (ser || []).filter(r => !(Math.abs(r.v) < 0.05 && r.e - r.s >= WAVE_PLACEHOLDER_MS));
 }
 
 const pick = (ser, t) => { const x = ser.find(r => t >= r.s && t < r.e); return x ? x.v : null; };
@@ -85,13 +96,14 @@ export async function nwsForecast(lat, lon) {
       };
     },
   });
+  const waveFt = dropWavePlaceholders(g.waveFt); // also cleans copies cached before this fix
   return {
     updated: g.updated ? new Date(g.updated) : null,
     at(t) {
       const ms = t.getTime();
       return {
         windMph: pick(g.windMph, ms), gustMph: pick(g.gustMph, ms), windFromDeg: pick(g.windFromDeg, ms),
-        pop: pick(g.pop, ms), thunder: pick(g.thunder, ms), tempF: pick(g.tempF, ms), waveFt: pick(g.waveFt, ms),
+        pop: pick(g.pop, ms), thunder: pick(g.thunder, ms), tempF: pick(g.tempF, ms), waveFt: pick(waveFt, ms),
       };
     },
   };

@@ -1,6 +1,6 @@
 // Score card (follows the selected PirateCast time), best window, tide summary, details.
 import { time, range, hour, compass, ft, esc, SOURCE_TAG } from './format.js';
-import { tweenNumber, rotateTo } from './motion.js';
+import { setNumbers, cancelNumberTween, rotateTo } from './motion.js';
 
 const etDate = d => d.toLocaleDateString('en-US', { timeZone: 'America/New_York' });
 const dayWord = (d, now) => {
@@ -63,13 +63,14 @@ export function updateScore(el, cond, s, { onBackToNow, label, isNow = s === con
   back.onclick = onBackToNow;
   if (s.score != null) {
     el.className = `score tone-${s.tone}`;
-    tweenNumber(el.querySelector('.num'), s.score);
+    setNumbers([{ el: el.querySelector('.num'), format: v => v.toFixed(1) }], s.score); // instant: same value as the dock
     el.querySelector('.lbltxt').textContent = s.label;
     const rs = s.reasons || [];
     el.querySelector('.why ul').innerHTML = rs.map(r => `<li class="${r.sign === '+' ? 'pos' : 'neg'}"><b>${r.sign === '+' ? '+' : '−'}</b>${esc(r.text)}</li>`).join('');
     const pick = [...rs.filter(r => r.sign === '+').slice(0, 2), ...rs.filter(r => r.sign === '-').slice(0, 2)];
     el.querySelector('.explain').innerHTML = pick.map(r => `<span class="${r.sign === '+' ? 'pos' : 'neg'}">${r.sign === '+' ? '+' : '−'} ${esc(r.text)}</span>`).join('');
   } else if (el.querySelector('.num')) {
+    cancelNumberTween();
     el.className = 'score tone-none';
     el.querySelector('.num').textContent = '–'; el.querySelector('.num').dataset.v = '';
     el.querySelector('.lbltxt').textContent = 'Not enough data';

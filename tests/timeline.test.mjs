@@ -59,7 +59,7 @@ test('day preview uses the best daylight score only', () => {
 });
 
 test('recommendation wording depends on now vs the selected forecast time', () => {
-  const w = { start: new Date('2026-11-22T20:40Z'), end: new Date('2026-11-22T23:10Z'), bestT: new Date('2026-11-22T21:00Z'), state: 'next' };
+  const w = { start: new Date('2026-11-22T20:40Z'), end: new Date('2026-11-22T23:10Z'), bestT: new Date('2026-11-22T21:00Z'), state: 'next', bestScore: 8.2 };
   const cond = { now, window: w, score: { reason: null } };
   const s = { score: 6, label: 'DECENT', daylight: true };
   assert.equal(recommendFor(cond, s, null, w).kind, 'wait');

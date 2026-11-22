@@ -19,7 +19,7 @@ import { recommendFor } from './engine/recommend.js';
 import { compass } from './ui/format.js';
 import { createWindMap } from './map/windmap.js';
 import { esc } from './ui/format.js';
-import { reducedMotion } from './ui/motion.js';
+import { reducedMotion, countUp } from './ui/motion.js';
 import { prefs } from './prefs.js';
 
 const $ = s => document.querySelector(s);
@@ -235,12 +235,18 @@ function renderConditions(spotSwitch = false) {
     return;
   }
   if (state.selT && state.selT < r.now) state.selT = null;
+  const prevScore = spotSwitch ? parseFloat($('#score .num')?.dataset.v) : NaN; // for the spot-switch count-up
   mountScore($('#score'), r);
   renderWindow($('#window'), r, { onPick: t => { setTime(t, { from: 'window' }); $('#piratecastPanel').scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'nearest' }); } });
   tideGraph.reset();
   lastDayKey = '';
   pirateCast.render(r, state.selT);          // silent: positions the highlight
   setTime(state.selT, { from: 'cast' });     // then sync everything to the shared time
+  if (spotSwitch) { // count card + dock up together from the previous spot's score (never diverges)
+    const card = $('#score .num'), dockNum = $('#timedock [data-c=score]'), to = parseFloat(card?.dataset.v);
+    const pre = dockNum && dockNum.textContent.startsWith('≈') ? '≈' : '';
+    countUp([{ el: card, format: v => v.toFixed(1) }, { el: dockNum, format: v => pre + v.toFixed(1) }], prevScore, to);
+  }
   renderDetails($('#details'), r);
   const missing = Object.entries(r.status).filter(([, ok]) => !ok).map(([k]) => ({ tide: 'tides', wind: 'observed wind', buoy: 'wave buoy', forecast: 'forecast' }[k]));
   $('#sourceNote').textContent = missing.length ? `Temporarily unavailable: ${missing.join(', ')}.` : '';
