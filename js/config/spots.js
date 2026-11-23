@@ -96,6 +96,42 @@ export const spots = [
       weights: DEFAULT_WEIGHTS,
     },
   },
+
+  // ---- Ocean City, Maryland ----
+  // NOT RATED until Ocean City has its own skim calibration: every profile value is null
+  // (same as Conquest), nothing copied from the Delaware spots. Conditions still show.
+  // Sources (verified 2026-11-22):
+  //  tide  8570280 OCEAN CITY (FISHING PIER) — harmonic reference station on the ocean side
+  //        of the inlet (4.3 ft high); the Inlet gauge 8570283 sits in the inlet channel and
+  //        reads a damped tide (2.6 ft), so it is NOT used for tides.
+  //  obs   8570283 Ocean City Inlet — live wind, air and water temperature.
+  //  buoy  44084 Bethany Beach (nearshore, 10.6 m) ~22 km N: the nearest wave buoy reporting
+  //        (44089 Wallops has no realtime data; 44009 is offshore and reports no waves).
+  //  forecast  NWS Wakefield (AKQ) gridpoint at the spot. That beach cell carries no wave
+  //        forecast (only a multi-day 0 ft placeholder), so waves come from the adjacent
+  //        ocean cell (waveForecast point: AKQ 124,124 Downtown, AKQ 124,125 Midtown).
+  {
+    id: 'oc-downtown', name: 'OC Downtown', fullName: 'Ocean City Downtown · 14th St',
+    lat: 38.3441, lon: -75.0811,
+    cams: ['commander-hotel-14th-st'],
+    sources: {
+      tide: '8570280', tideName: 'Ocean City (Fishing Pier)', obs: '8570283', obsName: 'Ocean City Inlet',
+      buoy: '44084', buoyName: 'Bethany Beach buoy (22 km N)',
+      waveForecast: { lat: 38.3441, lon: -75.0650, name: 'NWS Wakefield ocean cell' },
+    },
+    profile: { shoreFacingDeg: null, tide: null, wind: null, waves: null, weights: DEFAULT_WEIGHTS },
+  },
+  {
+    id: 'oc-midtown', name: 'OC Midtown', fullName: 'Ocean City Midtown · 29th St',
+    lat: 38.3579, lon: -75.0733,
+    cams: ['econo-lodge-29th-st'],
+    sources: {
+      tide: '8570280', tideName: 'Ocean City (Fishing Pier)', obs: '8570283', obsName: 'Ocean City Inlet',
+      buoy: '44084', buoyName: 'Bethany Beach buoy (21 km N)',
+      waveForecast: { lat: 38.3579, lon: -75.0600, name: 'NWS Wakefield ocean cell' },
+    },
+    profile: { shoreFacingDeg: null, tide: null, wind: null, waves: null, weights: DEFAULT_WEIGHTS },
+  },
 ];
 
 export const spotById = id => spots.find(s => s.id === id);

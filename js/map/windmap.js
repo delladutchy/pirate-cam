@@ -28,7 +28,7 @@ export function createWindMap(section, { onSelectSpot }) {
   const mapEl = section.querySelector('.wm-map');
   const timeEl = section.querySelector('.wm-time');
   const infoEl = section.querySelector('.wm-info');
-  let L = null, map = null, particles = null, markers = {}, latest = null, onScreen = false;
+  let L = null, map = null, particles = null, markers = {}, latest = null, onScreen = false, lastSpot = null, homeBounds = null;
   const coarse = window.matchMedia?.('(pointer: coarse)').matches;
 
   // lazy init
@@ -46,6 +46,7 @@ export function createWindMap(section, { onSelectSpot }) {
       attributionControl: false, // credits are one line under the map (index.html .wm-credits), never under the dock
     });
     L.control.zoom({ position: 'bottomright' }).addTo(map);
+    homeBounds = map.getBounds(); // the initial Delaware view
     L.tileLayer(BASE.url, BASE.options).addTo(map);
     L.tileLayer(DETAIL.url, DETAIL.options).addTo(map);
     particles = createParticles(map, L, { reduced: reducedMotion });
@@ -89,6 +90,17 @@ export function createWindMap(section, { onSelectSpot }) {
     // wind
     const pts = windPoints(spots, results, t);
     particles.setField(createSpotField(pts), animate);
+    // keep the selected spot on screen (Delaware spots all sit in the initial view, so this only
+    // moves the map for a spot outside it, e.g. Ocean City, and back again)
+    if (spotId !== lastSpot) {
+      lastSpot = spotId;
+      const sp = spots.find(s => s.id === spotId);
+      if (sp && !map.getBounds().pad(-0.05).contains([sp.lat, sp.lon])) {
+        const home = homeBounds && homeBounds.contains([sp.lat, sp.lon]); // visible in the original view
+        if (home) map.setView(VIEW.center, VIEW.zoom, { animate: !reducedMotion() }); // back to the original Delaware view
+        else map.setView([sp.lat, sp.lon], map.getZoom(), { animate: !reducedMotion() });
+      }
+    }
     // captions
     const sel = pts.find(p => p.id === spotId);
     timeEl.textContent = label;

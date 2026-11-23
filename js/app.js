@@ -68,7 +68,7 @@ function showCaption() {
   const nearby = !spot.cams.length;
   $('#camtitle').textContent = nearby ? spot.fullName : c.name;
   $('#camnote').textContent = nearby ? `No camera here yet · nearest live cam: ${c.name}` : c.note;
-  $('#direct').href = c.src;
+  $('#direct').href = c.href || c.src; // YouTube cams link to their watch page
   $('#camOnlyName').textContent = c.name;
 }
 

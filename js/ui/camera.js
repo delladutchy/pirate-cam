@@ -60,6 +60,14 @@ export async function renderMedia(media, c) {
       e.addEventListener('error', () => showFailure(media, retry), { once: true });
       e.src = c.src;
     }
+  } else if (c.kind === 'youtube') {
+    // YouTube's own embed player, unmodified (no overlay on its branding). YouTube needs the
+    // referrer to identify the embedding site.
+    e = document.createElement('iframe'); e.src = c.src;
+    e.allow = 'autoplay; encrypted-media; fullscreen; picture-in-picture'; e.allowFullscreen = true;
+    e.referrerPolicy = 'strict-origin-when-cross-origin';
+    e.title = `${c.name} live camera (YouTube)`;
+    media.appendChild(e);
   } else {
     e = document.createElement('iframe'); e.src = c.src; e.allow = 'autoplay; fullscreen; picture-in-picture'; e.allowFullscreen = true;
     e.title = `${c.name} live camera`;
