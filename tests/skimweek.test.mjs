@@ -181,3 +181,45 @@ test('hourly score carousel and the controller\'s day row are gone; weekly outlo
   assert.match(dock, /td-now/); assert.match(dock, /td-bubble/);
   assert.doesNotMatch(app, /renderWindow|createPirateCast/);
 });
+
+// ---------- complete-data ranking ----------
+import { isComplete } from '../js/engine/week.js';
+test('an incomplete forecast (waves missing) cannot beat a complete one; PirateCast BEST prefers complete', () => {
+  // Bethany: waves only on Tuesday morning → Tuesday afternoon is incomplete
+  const full = makeCond('dewey', { wave: 0.6 });                // complete all week, modest scores
+  const spot = spotById('bethany');
+  const ev = []; let t = Date.parse('2026-11-21T03:00Z'), hi = true;
+  while (t < Date.parse('2026-12-02T00:00Z')) { ev.push({ t: new Date(t), v: hi ? 4.2 : 0.2, type: hi ? 'H' : 'L' }); t += 6.2 * H; hi = !hi; }
+  const grid = { at: tt => ({ windMph: 4, gustMph: 6, windFromDeg: 280, pop: 0, thunder: 0, tempF: 50, waveFt: tt < Date.parse('2026-11-24T16:00Z') ? 0.5 : null }) };
+  const part = buildConditions(spot, { tideEvents: ev, grid, status: { tide: true, wind: false, buoy: false, forecast: true } }, NOW);
+  const days = forecastDays(part.timeline, part.now);
+  const tue = days.find(d => d.label === 'Tue');
+  const tl = part.timeline.filter(s => s.t >= tue.start && s.t < tue.end && s.skimmable);
+  const incBest = Math.max(...tl.filter(s => s.skimmable && s.score != null && !isComplete(s)).map(s => s.score));
+  const cmpBest = Math.max(...tl.filter(s => s.skimmable && isComplete(s)).map(s => s.score));
+  assert.ok(incBest > cmpBest, `fixture: the incomplete afternoon (${incBest}) out-scores the complete morning (${cmpBest})`);
+  const w = spotDayBest(part, tue);
+  assert.equal(w.complete, true); assert.equal(w.bestScore, cmpBest, 'BEST band = best COMPLETE time, not the higher incomplete one');
+  assert.ok(isComplete(w.peak));
+  // a later day with no waves at all: the spot still shows its incomplete best (≈), but cannot win
+  const fri = days.find(d => d.label === 'Fri');
+  const wf = spotDayBest(part, fri);
+  assert.equal(wf.complete, false); assert.equal(wf.peak.confidence, 'low');
+  const o = weekOutlook({ dewey: full, bethany: part }, spots);
+  const ofri = o.days.find(d => d.day.label === 'Fri');
+  assert.equal(ofri.best.spot.id, 'dewey', `complete Dewey ${ofri.best.w.bestScore} beats incomplete Bethany ${wf.bestScore}`);
+  assert.ok(wf.bestScore > ofri.best.w.bestScore, 'even though the incomplete score is higher');
+  for (const d of o.days) if (d.best) assert.ok(isComplete(d.best.sample), `${d.day.label}: winner is complete`);
+  assert.ok(isComplete(o.top.sample), 'Best This Week is complete');
+});
+
+test('a day where no rated spot has a complete forecast shows "–" (no winner)', () => {
+  const spot = spotById('dewey');
+  const ev = []; let t = Date.parse('2026-11-21T03:00Z'), hi = true;
+  while (t < Date.parse('2026-12-02T00:00Z')) { ev.push({ t: new Date(t), v: hi ? 4.2 : 0.2, type: hi ? 'H' : 'L' }); t += 6.2 * H; hi = !hi; }
+  const noWaves = buildConditions(spot, { tideEvents: ev, grid: { at: () => ({ windMph: 4, gustMph: 6, windFromDeg: 280, pop: 0, thunder: 0, tempF: 50, waveFt: null }) }, status: { tide: true, wind: false, buoy: false, forecast: true } }, NOW);
+  const o = weekOutlook({ dewey: noWaves }, spots);
+  assert.ok(o.days.every(d => d.best === null), 'every day: no complete forecast → no winner');
+  assert.equal(o.top, null);
+  assert.ok(o.days.slice(1).every(d => spotDayBest(noWaves, d.day)?.complete === false), 'the spot itself still has an (incomplete) day best to show');
+});

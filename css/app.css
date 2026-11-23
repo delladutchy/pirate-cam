@@ -189,18 +189,17 @@ h1{font-family:'Pirata One',Georgia,serif;font-size:34px;letter-spacing:.5px}
 .dg-legend .sw.best{margin-left:8px}
 
 /* time-aligned weather row under PirateCast (NWS forecast) */
-.dg-wx{position:relative;height:44px;margin:2px 0 4px;border-top:1px solid #1a2128}
+.dg-wx{position:relative;height:56px;margin:2px 0 0;border-top:1px solid #1a2128}
 .dg-wx.none{height:auto;padding:8px 22px 0;font-size:11px;color:var(--faint)}
-.wxc{position:absolute;top:5px;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:1px;line-height:1.2;font-variant-numeric:tabular-nums;white-space:nowrap;cursor:pointer;padding:0 2px;border-radius:6px}
-.wxc.l{transform:none;align-items:flex-start}.wxc.r{transform:translateX(-100%);align-items:flex-end}
+.wx-k{position:absolute;left:0;top:4px;font-size:8.5px;letter-spacing:1px;text-transform:uppercase;color:var(--faint);pointer-events:none}
+.wxc{position:absolute;top:17px;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:1px;line-height:1.2;font-variant-numeric:tabular-nums;white-space:nowrap;cursor:pointer;padding:0 2px;border-radius:6px}
 .wxc .wt{display:none}
-.wxc b{font-size:12.5px;font-weight:600;color:var(--text)}
-.wxc .wd{font-size:10px;color:var(--muted);max-width:76px;overflow:hidden;text-overflow:ellipsis}
-.wxc .pp{position:absolute;top:0;left:calc(100% - 2px);font-size:9px;color:#8fb3cf}
-.wxc.r .pp{left:auto;right:calc(100% - 2px)}
+.wxc b{font-size:13.5px;font-weight:650;color:var(--text)}
+.wxc .wd{font-size:11px;color:#a3adb6;max-width:84px;overflow:hidden;text-overflow:ellipsis}
+.wxc .pp{position:absolute;top:0;left:calc(100% - 2px);font-size:10px;color:#9cc0da}
 .wxc.on b{color:var(--accent);text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--faint)}
 .wxc.on .wd{color:var(--text)}
-@media(max-width:500px){.wxc .wd{max-width:74px;font-size:9.5px}}
+@media(max-width:500px){.wxc .wd{max-width:80px;font-size:10.5px}}
 
 /* WEEKLY SKIM OUTLOOK: one quiet row — best rated spot & time per day */
 .weekpanel{margin-top:18px;padding-top:12px}

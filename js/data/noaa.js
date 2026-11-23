@@ -71,8 +71,37 @@ export function series(prop, conv = v => v) {
  */
 export const WAVE_PLACEHOLDER_MS = 24 * 3600e3;
 export function dropWavePlaceholders(ser) {
-  return (ser || []).filter(r => !(Math.abs(r.v) < 0.05 && r.e - r.s >= WAVE_PLACEHOLDER_MS));
+  return dropIsolatedWaveZeros((ser || []).filter(r => !(Math.abs(r.v) < 0.05 && r.e - r.s >= WAVE_PLACEHOLDER_MS)));
 }
+
+/**
+ * NWS gives wave height in whole feet. Near the inlet a cell's forecast can dip to "0" for an
+ * hour or a few (e.g. 2 ft · 0 for 4 h · 2 ft) — a rounding artifact, not flat water. A zero run
+ * of at most WAVE_ZERO_GAP_MS that is directly preceded AND followed by non-zero values is
+ * therefore treated as MISSING: those hours read "Not available" and are scored without waves
+ * (low confidence). Nothing is interpolated and no other source fills the gap. Zeros at the
+ * start or end of the series, or lasting longer, stay as forecast (a sustained calm is possible).
+ */
+export const WAVE_ZERO_GAP_MS = 6 * 3600e3;
+export function dropIsolatedWaveZeros(ser) {
+  const zero = r => Math.abs(r.v) < 0.05;
+  const out = [];
+  for (let i = 0; i < ser.length;) {
+    if (!zero(ser[i])) { out.push(ser[i++]); continue; }
+    let j = i; while (j + 1 < ser.length && zero(ser[j + 1]) && ser[j + 1].s === ser[j].e) j++;
+    const prev = ser[i - 1], next = ser[j + 1];
+    const isolated = prev && next && !zero(prev) && !zero(next) && prev.e === ser[i].s && next.s === ser[j].e
+      && ser[j].e - ser[i].s <= WAVE_ZERO_GAP_MS;
+    if (!isolated) for (let k = i; k <= j; k++) out.push(ser[k]);
+    i = j + 1;
+  }
+  return out;
+}
+
+// Version of the cached forecast shape below. Bump it whenever `transform` keeps different
+// fields, so copies cached by an older deploy are refetched instead of read with fields missing.
+// 2 = adds sky cover + weather type (weather row).
+export const FORECAST_CACHE_VERSION = 2;
 
 const pick = (ser, t) => { const x = ser.find(r => t >= r.s && t < r.e); return x ? x.v : null; };
 
@@ -82,7 +111,7 @@ export async function nwsForecast(lat, lon) {
   if (!gridUrl) throw new Error('no grid');
   // Keep only the fields we use so the cached copy stays small.
   const g = await getJSON(gridUrl, {
-    ttlMs: 20 * MIN,
+    ttlMs: 20 * MIN, version: FORECAST_CACHE_VERSION,
     transform: j => {
       const P = j.properties;
       return {
@@ -108,7 +137,7 @@ export async function nwsForecast(lat, lon) {
       return {
         windMph: pick(g.windMph, ms), gustMph: pick(g.gustMph, ms), windFromDeg: pick(g.windFromDeg, ms),
         pop: pick(g.pop, ms), thunder: pick(g.thunder, ms), tempF: pick(g.tempF, ms), waveFt: pick(waveFt, ms),
-        sky: g.sky ? pick(g.sky, ms) : null, wx: g.wx ? pick(g.wx, ms) : null, // older cached copies lack these: unavailable
+        sky: g.sky ? pick(g.sky, ms) : null, wx: g.wx ? pick(g.wx, ms) : null,
       };
     },
   };

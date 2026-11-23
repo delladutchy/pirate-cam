@@ -107,13 +107,19 @@ export function createDayGraph(el, { onPick }) {
     const wx = weatherHours(t0, t1, W - padL - padR).map(t => weatherAt(cond.timeline, t)).filter(Boolean);
     const any = wx.some(x => x.temp != null || x.cond);
     const row = !any ? '<div class="dg-wx none">Weather forecast not available for these hours</div>'
-      : `<div class="dg-wx" aria-label="Weather by hour">${wx.map(x => {
+      : `<div class="dg-wx" aria-label="Weather by hour"><span class="wx-k" aria-hidden="true">Weather</span>${wx.map(x => {
         const pct = X(x.t.getTime()) / W * 100;
-        const edge = pct < 7 ? ' l' : pct > 93 ? ' r' : '';
         const pop = x.pop != null && x.pop >= 10 ? `<span class="pp">${x.pop}%</span>` : '';
-        return `<div class="wxc${edge}" style="left:${pct.toFixed(2)}%" data-t="${x.t.getTime()}"><span class="wt">${hour(x.t)}</span><b>${x.temp != null ? x.temp + '°' : '–'}</b><span class="wd">${x.cond || '–'}</span>${pop}</div>`;
+        return `<div class="wxc" style="left:${pct.toFixed(2)}%" data-t="${x.t.getTime()}"><span class="wt">${hour(x.t)}</span><b>${x.temp != null ? x.temp + '°' : '–'}</b><span class="wd">${x.cond || '–'}</span>${pop}</div>`;
       }).join('')}</div>`;
     el.innerHTML = svg + row;
+    // cells stay centred on their hour; one that would run past an edge is nudged just inside
+    const rowW = el.clientWidth || W;
+    for (const c of el.querySelectorAll('.wxc')) {
+      const x = parseFloat(c.style.left) / 100 * rowW, half = c.offsetWidth / 2;
+      const shift = x - half < 0 ? half - x : x + half > rowW ? rowW - x - half : 0;
+      if (shift) c.style.transform = `translateX(calc(-50% + ${shift.toFixed(1)}px))`;
+    }
     const valid = pts.filter(s => s.t.getTime() >= nowMs - 15 * 60e3);
     const firstPt = pts.length ? pts[0].t.getTime() : t0; // first 15-min step inside the window
     geo = { W, t0, t1, padL, padR, X, Y, base, pts, cond, minT: Math.max(firstPt, nowMs), maxT: valid.length ? valid.at(-1).t.getTime() : firstPt };
