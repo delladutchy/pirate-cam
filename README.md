@@ -11,7 +11,7 @@ one Vercel serverless function.
 | `js/config/spots.js` | Skim spots, NOAA stations and **tunable skim profiles** |
 | `js/data/` | Fetching (timeouts, caching) and NOAA normalisation |
 | `js/engine/` | Tide curve, sunrise/sunset, Skim Score, best window, timeline |
-| `js/ui/` | Camera player + bug, PirateCast timeline, interactive tide graph, score/window cards, motion helpers |
+| `js/ui/` | Camera player + bug, Weekly Skim Outlook, PirateCast graph + weather row, floating time controller, interactive tide graph, score card, motion helpers |
 | `js/map/` | Wind map: `provider.js` (imagery), `model.js` (markers + wind points, FROM→TO conversion), `windfield.js` (spot-based field), `particles.js` (canvas renderer), `windmap.js` (Leaflet view) — see `docs/MAP.md` |
 | `vendor/leaflet/` | Leaflet 1.9.4 (BSD-2), lazy-loaded |
 | `api/buoy.js` | Proxies NDBC buoy 44084 (NDBC has no CORS) |
@@ -32,9 +32,12 @@ Northside are starting estimates. **Conquest Road Beach** is intentionally uncon
 (all `null`) — it shows live conditions but no score until its profile is filled in.
 
 ## Interaction
-One selected forecast time drives everything: tap an hour in **PirateCast** (or drag with a mouse, or use ← →),
-tap or **drag the tide graph** (mouse or finger; ← → keys too), or tap the Best Window card.
-The wind map follows the same time. The score card, wind arrow, tide playhead and readout follow it.
+One selected forecast time drives everything: tap a day in the **Weekly Skim Outlook** (it switches to
+that day's best rated spot and time), drag or tap **PirateCast** or the floating time controller
+(← → keys too), or tap / **drag the tide graph**. The wind map, score card, wind arrow, tide playhead,
+weather row and readout all follow it. Forecast times live inside **skim hours** — 1 h after sunrise to
+1 h before sunset, per spot and day; night is outside the skim forecast, never "POOR". The live camera
+never reloads when the forecast time changes.
 Motion is limited to value changes and respects `prefers-reduced-motion`.
 
 ## Links

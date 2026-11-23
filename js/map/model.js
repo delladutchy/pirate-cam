@@ -21,13 +21,15 @@ export function toVector(mph, fromDeg) {
   return { u: mph * Math.sin(travel), v: mph * Math.cos(travel) };
 }
 
-/** One marker per configured spot, using the project's own coordinates. */
+/** One marker per configured spot, using the project's own coordinates. Outside skim hours a
+ *  marker shows no score (darkness is outside the skim window, not POOR). */
 export function mapMarkers(spots, results, t = null) {
   return spots.map(spot => {
     const r = results[spot.id];
     const base = { id: spot.id, name: spot.name, fullName: spot.fullName, lat: spot.lat, lon: spot.lon };
     if (!r || r === 'error') return { ...base, score: null };
     const s = sampleAt(r.timeline, t);
+    if (s.skimmable === false) return { ...base, score: null, outside: true, windMph: s.wind?.mph ?? null, windFromDeg: s.wind?.fromDeg ?? null };
     return { ...base, score: s.score, label: s.label ?? null, tone: s.tone ?? null, windMph: s.wind?.mph ?? null, windFromDeg: s.wind?.fromDeg ?? null };
   });
 }

@@ -1,6 +1,7 @@
 // NOAA data access, normalised. Each loader resolves to data or null — one
 // failing source never blocks the others.
 import { getJSON } from './http.js';
+import { wxCode } from '../engine/weather.js';
 
 const COOPS = 'https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?application=pirate_view&format=json&units=english&time_zone=gmt';
 const KN_TO_MPH = 1.15078, KMH_TO_MPH = 0.621371;
@@ -93,6 +94,9 @@ export async function nwsForecast(lat, lon) {
         thunder: series(P.probabilityOfThunder),
         tempF: series(P.temperature, c => c * 9 / 5 + 32),
         waveFt: series(P.waveHeight, m => m * 3.28084),
+        // weather row: sky cover % and the coded weather type (same response, no extra request)
+        sky: series(P.skyCover),
+        wx: series(P.weather, wxCode),
       };
     },
   });
@@ -104,6 +108,7 @@ export async function nwsForecast(lat, lon) {
       return {
         windMph: pick(g.windMph, ms), gustMph: pick(g.gustMph, ms), windFromDeg: pick(g.windFromDeg, ms),
         pop: pick(g.pop, ms), thunder: pick(g.thunder, ms), tempF: pick(g.tempF, ms), waveFt: pick(waveFt, ms),
+        sky: g.sky ? pick(g.sky, ms) : null, wx: g.wx ? pick(g.wx, ms) : null, // older cached copies lack these: unavailable
       };
     },
   };

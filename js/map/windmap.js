@@ -2,11 +2,12 @@
 // Holds NO app state of its own: the app passes in spots, loaded results, the current
 // spot and the ONE shared selected time; marker taps call back into the app's select().
 // Leaflet is lazy-loaded when the section approaches the viewport.
-import { BASE, DETAIL, VIEW } from './provider.js';
+import { BASE, DETAIL, TOPO, VIEW } from './provider.js';
 import { mapMarkers, windPoints } from './model.js';
 import { createSpotField } from './windfield.js';
 import { createParticles } from './particles.js';
 import { reducedMotion } from '../ui/motion.js';
+import { prefs } from '../prefs.js';
 import { compass, esc } from '../ui/format.js';
 
 let leafletLoading = null;
@@ -29,6 +30,22 @@ export function createWindMap(section, { onSelectSpot }) {
   const timeEl = section.querySelector('.wm-time');
   const infoEl = section.querySelector('.wm-info');
   let L = null, map = null, particles = null, markers = {}, latest = null, onScreen = false, lastSpot = null, homeBounds = null;
+  let satLayers = [], topoLayer = null, mode = prefs.mapMode === 'topo' ? 'topo' : 'sat';
+  // tiny two-state style control: Satellite | Topo (the choice is remembered on this device)
+  const modeEl = section.querySelector('.wm-mode');
+  function setMode(m) {
+    mode = m;
+    prefs.mapMode = m === 'topo' ? 'topo' : null;
+    modeEl?.querySelectorAll('[data-mode]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === m)));
+    mapEl.classList.toggle('topo', m === 'topo');
+    section.querySelector('.cr-sat')?.toggleAttribute('hidden', m === 'topo');
+    section.querySelector('.cr-topo')?.toggleAttribute('hidden', m !== 'topo');
+    if (!map) return;
+    if (m === 'topo') { satLayers.forEach(l => map.removeLayer(l)); if (!topoLayer) topoLayer = L.tileLayer(TOPO.url, TOPO.options); topoLayer.addTo(map); }
+    else { if (topoLayer) map.removeLayer(topoLayer); satLayers.forEach(l => l.addTo(map)); }
+  }
+  modeEl?.addEventListener('click', e => { const b = e.target.closest('[data-mode]'); if (b && b.dataset.mode !== mode) setMode(b.dataset.mode); });
+  setMode(mode);
   const coarse = window.matchMedia?.('(pointer: coarse)').matches;
 
   // lazy init
@@ -47,8 +64,8 @@ export function createWindMap(section, { onSelectSpot }) {
     });
     L.control.zoom({ position: 'bottomright' }).addTo(map);
     homeBounds = map.getBounds(); // the initial Delaware view
-    L.tileLayer(BASE.url, BASE.options).addTo(map);
-    L.tileLayer(DETAIL.url, DETAIL.options).addTo(map);
+    satLayers = [L.tileLayer(BASE.url, BASE.options), L.tileLayer(DETAIL.url, DETAIL.options)];
+    setMode(mode); // adds the satellite layers or the topo layer
     particles = createParticles(map, L, { reduced: reducedMotion });
 
     if (coarse) setupTouchLock();

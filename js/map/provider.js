@@ -23,5 +23,13 @@ export const DETAIL = {
   },
 };
 
+// Optional TOPO mode: USGS Topo base map (The National Map tile cache; USGS data is US public
+// domain, credit requested — see the credits line in index.html). Same host as DETAIL, no key.
+// Drawn in dark tones by a CSS filter (.wm-map.topo) so it sits in Pirate View's palette.
+export const TOPO = {
+  url: 'https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}',
+  options: { maxNativeZoom: 16, maxZoom: 16 },
+};
+
 /** Initial view: the Pirate View beaches from Dewey to Bethany, with ocean to the east. */
 export const VIEW = { center: [38.62, -75.04], zoom: 11, minZoom: 8, maxZoom: 16 };

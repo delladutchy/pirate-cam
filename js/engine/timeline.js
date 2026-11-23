@@ -4,12 +4,14 @@ const MIN = 60e3, HOUR = 3600e3;
 /**
  * Resolve a requested selection into the shared state value.
  *  - `step` moves relative to the current selection (keyboard).
+ *  - `snap(x, dir)` (optional) moves x into an allowed range, e.g. the skim hours (skim.js).
  *  - Clamped to [now, end]; within `snapMs` of now it becomes null, which means "Now / live".
  */
-export function resolveSelection({ t = null, step = 0, current = null, now, end, snapMs = 8 * MIN }) {
+export function resolveSelection({ t = null, step = 0, current = null, now, end, snapMs = 8 * MIN, snap = null }) {
   let x = step ? new Date((current || now).getTime() + step) : t;
   if (!x) return null;
-  if (x > end) x = new Date(end.getTime());
+  if (snap) x = snap(x, Math.sign(step));
+  if (x > end) { x = new Date(end.getTime()); if (snap) x = snap(x, -1); }
   if (x - now < snapMs) return null;
   return x;
 }
@@ -53,9 +55,9 @@ export function confidenceOf(sample, now) {
   return 'medium';
 }
 
-/** Per-day preview for the day chips: best daylight score (and its tone), or none. */
+/** Per-day preview: best skim-hours score (and its tone), or none. */
 export function daySummary(timeline, day) {
-  const s = timeline.filter(x => x.t >= day.start && x.t < day.end && x.daylight && x.score != null);
+  const s = timeline.filter(x => x.t >= day.start && x.t < day.end && (x.skimmable ?? x.daylight) && x.score != null);
   if (!s.length) return { best: null, tone: null };
   const b = s.reduce((p, x) => (x.score > p.score ? x : p));
   return { best: b.score, tone: b.tone, bestT: b.t, confidence: b.confidence ?? null };

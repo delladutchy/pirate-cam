@@ -46,30 +46,31 @@
     <section class="rail">
       <div class="spothead"><h2 id="spotName"></h2><button id="favBtn" class="fav" aria-pressed="false">☆ Favorite</button></div>
       <div id="score" class="score" aria-live="polite"><p class="na loading">Loading conditions…</p></div>
-      <div id="window" class="window" hidden role="button" tabindex="0"></div>
     </section>
   </div>
+
+  <section class="panel weekpanel" id="weekPanel" aria-label="Weekly skim outlook — best rated spot and time each day">
+    <div class="wk-head"><h3>Skim outlook</h3><div class="wk-top"></div></div>
+    <div class="wk-row"></div>
+  </section>
 
   <section class="panel forecast" id="piratecastPanel" aria-label="PirateCast forecast">
     <div class="pchead"><h3>PirateCast</h3><span id="dayLabel" class="daylabel"></span></div>
     <div id="dayGraph" class="daygraph-wrap"></div>
-    <p class="legend dg-legend"><span class="sw g"></span>7+ <span class="sw a"></span>5–6.9 <span class="sw r"></span>&lt;5 <span class="sw best"></span>Best · faded = after dark · ≈ low confidence</p>
-    <p id="pcReadout" class="pcreadout" aria-live="polite"></p>
-    <div id="piratecast" class="piratecast" role="group" aria-label="Hourly Pirate Score — tap an hour"></div>
-    <p class="legend"><span class="sw best"></span>Best window <span class="sw night"></span>After dark</p>
+    <p class="legend dg-legend"><span class="sw g"></span>7+ <span class="sw a"></span>5–6.9 <span class="sw r"></span>&lt;5 <span class="sw best"></span>Best <span class="lg-note">≈ low confidence</span></p>
   </section>
 
   <section class="panel tidepanel" aria-label="Tide">
     <h3>Tide</h3>
     <div id="tideSummary" class="tidesum"></div>
     <div id="tideGraph" class="tidegraph-wrap"></div>
-    <p class="legend"><span class="sw best"></span>Best window <span class="sw night"></span>Night <span class="sw now"></span>Now <span class="sw ph"></span>Selected time · tap the graph to pick a time</p>
+    <p class="legend"><span class="sw best"></span>Best window <span class="sw night"></span>Night <span class="sw now"></span>Now <span class="sw ph"></span>Selected</p>
   </section>
 
   <section class="panel windmap" id="windmapPanel" aria-label="Wind map">
-    <div class="wmhead"><h3>Wind map</h3><span class="wm-info"></span><span class="wm-time">Now</span></div>
+    <div class="wmhead"><h3>Wind map</h3><span class="wm-info"></span><div class="wm-mode" role="group" aria-label="Map style"><button type="button" data-mode="sat" aria-pressed="true">Satellite</button><button type="button" data-mode="topo" aria-pressed="false">Topo</button></div><span class="wm-time">Now</span></div>
     <div class="wm-map" role="region" aria-label="Satellite map of the Delaware beaches with animated wind. Wind is blended from the real NOAA and NWS wind at the Pirate View spots, not a regional weather model."></div>
-    <p class="wm-credits"><a href="https://s2maps.eu" target="_blank" rel="noopener">Sentinel-2 cloudless - https://s2maps.eu</a> by <a href="https://eox.at" target="_blank" rel="noopener">EOX IT Services GmbH</a> (Contains modified Copernicus Sentinel data 2016 &amp; 2017) · <a href="https://www.usgs.gov/programs/national-geospatial-program/national-map" target="_blank" rel="noopener">USGS</a> · Wind: NOAA/NWS at Pirate View spots</p>
+    <p class="wm-credits"><span class="cr-sat"><a href="https://s2maps.eu" target="_blank" rel="noopener">Sentinel-2 cloudless - https://s2maps.eu</a> by <a href="https://eox.at" target="_blank" rel="noopener">EOX IT Services GmbH</a> (Contains modified Copernicus Sentinel data 2016 &amp; 2017) · <a href="https://www.usgs.gov/programs/national-geospatial-program/national-map" target="_blank" rel="noopener">USGS</a></span><span class="cr-topo" hidden>Topo: <a href="https://www.usgs.gov/programs/national-geospatial-program/national-map" target="_blank" rel="noopener">USGS The National Map</a> (3DEP Elevation, GNIS, Hydrography, Boundaries) · U.S. Census TIGER/Line · USFS Roads · Natural Earth · NOAA NCEI — shown in dark tones</span> · Wind: NOAA/NWS at Pirate View spots</p>
   </section>
 
   <section class="panel detailpanel">
@@ -79,7 +80,7 @@
   </section>
 
   <footer class="help">
-    Cams: Angelcam, DelDOT · Map imagery: EOX Sentinel-2 cloudless 2016, USGS The National Map · Tides: NOAA CO-OPS · Wind &amp; temps: NOAA CO-OPS, National Weather Service · Waves &amp; water: NOAA NDBC 44084 ·
+    Cams: Angelcam, DelDOT · Map imagery: EOX Sentinel-2 cloudless 2016, USGS The National Map · Tides: NOAA CO-OPS · Wind, temps &amp; weather: NOAA CO-OPS, National Weather Service · Waves &amp; water: NOAA NDBC 44084 ·
     Pirate Score is a Pirate View estimate, not an official forecast — check the beach yourself.
   </footer>
 </main>

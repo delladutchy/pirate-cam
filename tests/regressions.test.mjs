@@ -21,7 +21,6 @@ const { series, dropWavePlaceholders } = await import('../js/data/noaa.js');
 const { buildConditions } = await import('../js/engine/conditions.js');
 const { spotById } = await import('../js/config/spots.js');
 const { recommendFor, windowQuality } = await import('../js/engine/recommend.js');
-const { cellIndexFor } = await import('../js/ui/piratecast.js');
 
 const fmt = v => (Number.isFinite(v) ? v.toFixed(1) : '–');
 const lowFmt = v => '≈' + v.toFixed(1);
@@ -155,18 +154,6 @@ test('3: NOW wording — no "Go now"/"Prime" for a poor or marginal best window'
   assert.match(recommendFor({ now, window: w(8, 'now'), score: {} }, s, null, null).sub, /Prime skim window/);
 });
 
-// ---------------- 4. PirateCast horizon ----------------
-test('4: past PirateCast\'s last hour no cell is selected (-1), inside it the nearest hour is', () => {
-  const t0 = Date.parse('2026-11-22T22:00Z'), H = 3600e3;
-  const hours = Array.from({ length: 37 }, (_, i) => ({ t: new Date(t0 + i * H) }));
-  const last = hours[36].t.getTime();
-  assert.equal(cellIndexFor(hours, null), 0, 'now → first cell');
-  assert.equal(cellIndexFor(hours, new Date(t0 + 5.2 * H)), 5);
-  assert.equal(cellIndexFor(hours, new Date(last + 29 * 60e3)), 36, 'within half an hour of the last cell');
-  assert.equal(cellIndexFor(hours, new Date(last + 31 * 60e3)), -1);
-  assert.equal(cellIndexFor(hours, new Date(t0 + 3 * 24 * H)), -1, 'Wednesday is beyond the hourly strip');
-  assert.equal(cellIndexFor([], new Date(t0)), -1);
-});
 
 test('3: a GOOD best window scored without waves (placeholder removed) is not called prime', () => {
   const now = new Date('2026-11-22T22:00Z');

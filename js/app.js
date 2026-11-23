@@ -1,19 +1,21 @@
-// Pirate View — wiring: routing, spot/camera switching, data refresh, and the
-// single "selected forecast time" that PirateCast, the score card and the tide
-// graph all share.
+// Pirate View — wiring: routing, spot/camera switching, data refresh, the Weekly Skim
+// Outlook, and the single "selected forecast time" that PirateCast, the score card, the
+// floating time controller, the tide graph and the wind map all share.
 import { cams, camSlug } from './config/cameras.js';
 import { spots, spotById, resolveHash } from './config/spots.js';
 import { loadSpotData } from './data/load.js';
 import { buildConditions } from './engine/conditions.js';
 import { renderMedia } from './ui/camera.js';
 import { createTideGraph } from './ui/tidegraph.js';
-import { createPirateCast } from './ui/piratecast.js';
-import { mountScore, updateScore, renderWindow, renderTideSummary, renderDetails, facts, timeLabel } from './ui/conditions.js';
+import { mountScore, updateScore, renderTideSummary, renderDetails, timeLabel } from './ui/conditions.js';
 import { sampleAt } from './map/model.js';
 import { createDayGraph } from './ui/daygraph.js';
 import { createTimeDock } from './ui/timedock.js';
 import { forecastDays } from './engine/days.js';
-import { dayBestWindow, windRelation } from './engine/score.js';
+import { windRelation } from './engine/score.js';
+import { skimRangeFor, snapToSkim } from './engine/skim.js';
+import { weekOutlook, spotDayBest } from './engine/week.js';
+import { createWeek } from './ui/week.js';
 import { resolveSelection } from './engine/timeline.js';
 import { recommendFor } from './engine/recommend.js';
 import { compass } from './ui/format.js';
@@ -86,11 +88,11 @@ $('#angles').addEventListener('click', e => { const b = e.target.closest('[data-
 function renderSpotNav() {
   $('#spots').innerHTML = spots.map(s => {
     const r = state.results[s.id];
-    const sc = r && r !== 'error' ? r.score : null;
+    const sc = r && r !== 'error' && r.timeline[0].skimmable !== false ? r.score : null; // outside skim hours: no live score
     const val = sc && sc.score != null ? `<span class="sv tone-${sc.tone}"><i></i>${sc.score.toFixed(1)}</span>` : `<span class="sv muted">${r === undefined ? '' : '–'}</span>`;
     return `<button class="spot ${s.id === state.spotId ? 'active' : ''}" data-spot="${s.id}" aria-label="${esc(s.fullName)}"><span class="sn">${esc(s.name)}</span>${val}</button>`;
   }).join('');
-  const scored = spots.map(s => state.results[s.id]).filter(r => r && r !== 'error' && r.score.score != null);
+  const scored = spots.map(s => state.results[s.id]).filter(r => r && r !== 'error' && r.score.score != null && r.timeline[0].skimmable !== false);
   const allIn = spots.every(s => state.results[s.id] !== undefined);
   const best = scored.sort((a, b) => b.score.score - a.score.score)[0];
   const el = $('#bestNow');
@@ -98,6 +100,7 @@ function renderSpotNav() {
     el.innerHTML = `<span class="k">Best right now</span> <button data-spot="${best.spot.id}">${esc(best.spot.fullName)} <b>${best.score.score.toFixed(1)}</b> ${best.score.label}</button>`;
     el.hidden = false;
   } else el.hidden = true;
+  renderWeek();
 }
 for (const sel of ['#spots', '#bestNow']) $(sel).addEventListener('click', e => { const b = e.target.closest('[data-spot]'); if (b) select(b.dataset.spot); });
 
@@ -124,58 +127,53 @@ async function ensureLoaded(spotId, force = false) {
 // the tide, which is a continuous NOAA-predicted curve, follows the exact time.
 function current() { const r = state.results[state.spotId]; return r && r !== 'error' ? r : null; }
 
-/** Days + each day's best window, computed once per loaded result. */
+/** Days + each day's skim window and DAY'S BEST, computed once per loaded result. The same
+ *  spotDayBest feeds the weekly outlook, so a weekly tap lands exactly on PirateCast's BEST.
+ *  (Go/Wait keeps using bestWindow: the earliest good-enough opportunity.) */
 function dayInfo(r) {
   if (!r._days) {
     r._days = forecastDays(r.timeline, r.now);
-    // One DAY'S BEST window per day: the button's number, the time a tap selects, the day
-    // graph's BEST band and the day wording all come from it. (The "Best next window" and
-    // Go/Wait keep using bestWindow: the earliest good-enough opportunity.)
-    r.dayWindows = r._days.map(d => {
-      const ds = r.timeline.filter(s => s.t >= d.start && s.t < d.end && s.t >= r.now);
-      return ds.length > 2 ? dayBestWindow(ds) : null;
-    });
-    for (const d of r._days) d.preview = dayPreview(r, d, r.dayWindows[d.index]);
+    for (const d of r._days) d.skim = skimRangeFor(d, r.skim);
+    r.dayWindows = r._days.map(d => spotDayBest(r, d));
   }
   return r._days;
 }
-/** What a day button shows. Today → the live score (a tap goes to NOW); other days → that
- *  day's best (a tap goes to exactly that moment). */
-function dayPreview(r, d, w) {
-  if (d.index === 0) {
-    const s = r.timeline[0];
-    return s.score != null ? { best: s.score, tone: s.tone, bestT: null, confidence: s.confidence, kind: 'now' } : { best: null };
-  }
-  if (!w || !w.peak) return { best: null };
-  return { best: w.bestScore, tone: w.tone, bestT: w.bestT, confidence: w.peak.confidence ?? null, kind: 'daybest' };
-}
 const dayOf = (r, t) => dayInfo(r).find(d => t >= d.start && t < d.end) || dayInfo(r)[0];
+/** The day PirateCast and the time controller show. A picked time → its day. "Now" → today,
+ *  unless today's skim hours are over: then the next day that has skim hours. */
+function viewDay(r, t) {
+  if (t) return dayOf(r, t);
+  const days = dayInfo(r);
+  return days.find(d => d.skim && d.skim.end >= r.now) || days[0];
+}
 
 let lastDayKey = '';
 function setTime(t, { from = '', dragging = false, step = 0 } = {}) {
   const r = current(); if (!r) return;
-  t = resolveSelection({ t, step, current: state.selT, now: r.now, end: r.timeline.at(-1).t }); // null = live now
+  // Forecast times live inside skim hours only: anything else moves to the nearest skim time
+  // in the direction of travel (keyboard steps jump to the next/previous day's window).
+  const snap = (x, dir) => snapToSkim(x, r.skim, { dir, min: r.now }) || x;
+  t = resolveSelection({ t, step, current: state.selT, now: r.now, end: r.timeline.at(-1).t, snap }); // null = live now
   state.selT = t;
-  const s = sampleAt(r.timeline, t);
+  const raw = sampleAt(r.timeline, t);
+  const outside = raw.skimmable === false; // only "Now" can be outside skim hours
+  const dayNow = viewDay(r, t);
+  const s = outside ? { ...raw, score: null, label: null, tone: null, confidence: null, outside: true } : raw;
   const label = timeLabel(t, r);
   const tideNow = t && r.tide && r.tide.covers(t) ? r.tide.at(t) : s.tide;
   const shown = { ...s, tide: tideNow };
   const relation = windRelation(r.spot.profile.shoreFacingDeg, s.wind);
-  const dayNow = dayOf(r, t || r.now);
-  const rec = recommendFor(r, s, t, r.dayWindows[dayNow.index]);
+  const rec = recommendFor(r, raw, t, r.dayWindows[dayNow.index]);
   updateScore($('#score'), r, shown, { label, isNow: !t, relation, rec, onBackToNow: () => setTime(null, { from: 'back' }) });
   timeDock.show(dockView(r, shown, t, relation, rec));
   renderTideSummary($('#tideSummary'), r, { t: t || r.now, tide: tideNow }, label);
   tideGraph.render(r, t || r.now, { instant: dragging });
-  if (from !== 'cast') pirateCast.highlightTime(t || r.now, { scroll: dragging ? 'instant' : 'smooth' });
-  // day graph + dock: redraw when the day (or the data) changes, otherwise just move the marker
-  const day = dayOf(r, t || r.now), key = r.spot.id + '|' + day.index + '|' + r.now.getTime();
-  if (key !== lastDayKey) { lastDayKey = key; dayGraph.render(r, day, t); timeDock.render(r, dayInfo(r), day, t); }
+  // PirateCast + dock: redraw when the day (or the data) changes, otherwise just move the marker
+  const day = dayNow, key = r.spot.id + '|' + day.index + '|' + r.now.getTime();
+  if (key !== lastDayKey) { lastDayKey = key; dayGraph.render(r, day, t, day.skim); timeDock.render(r, day, t, day.skim); }
   else { dayGraph.place(t, dragging); timeDock.place(t, dragging); }
   $('#dayLabel').textContent = `${day.long} · ${day.sub}`;
-  const f = facts(shown);
-  $('#pcReadout').innerHTML = `<b>${label}</b>${s.score != null ? ` · <span class="tone-${s.tone}"><span class="lbl"><i></i>${s.score.toFixed(1)} ${s.label}</span></span>` : ''}${['waves', 'wind', 'tide'].filter(k => f[k]).map(k => ` · ${k[0].toUpperCase() + k.slice(1)} ${f[k]}`).join('')}${s.daylight ? '' : ' · <span class="muted">after dark</span>'}`;
-  if (!dragging) updateMap();
+  if (!dragging) { updateMap(); markWeek(); }
   else scheduleMap();
 }
 
@@ -186,7 +184,7 @@ function dockView(r, s, t, relation, rec) {
   const gust = w && Number.isFinite(w.gustMph) && w.gustMph > w.mph + 0.5 ? `g${Math.round(w.gustMph)}` : '';
   return {
     score: s.score != null ? (s.confidence === 'low' ? '≈' : '') + s.score.toFixed(1) : '–', // ≈ = low confidence (inputs missing / far out)
-    label: s.score != null ? s.label : r.score.reason === 'not-configured' ? 'NOT RATED' : 'NO DATA',
+    label: s.score != null ? s.label : r.score.reason === 'not-configured' ? 'NOT RATED' : s.outside ? (s.daylight ? 'OFF-HOURS' : 'AFTER DARK') : 'NO DATA',
     tone: s.score != null ? s.tone : null,
     wind: w && Number.isFinite(w.mph) ? (w.mph < 1 ? 'Calm' : `${compass(w.fromDeg)} ${Math.round(w.mph)}`) : '–',
     windsub: [gust, relation ? REL[relation] : ''].filter(Boolean).join(' · ') || (w ? 'mph' : 'no wind data'),
@@ -202,21 +200,37 @@ function dockView(r, s, t, relation, rec) {
   };
 }
 
-function pickDay(i) {
-  const r = current(); if (!r) return;
-  if (i === 0) return setTime(null, { from: 'day' });
-  const d = dayInfo(r)[i], w = r.dayWindows[i];
-  const noon = new Date(d.start.getTime() + 12 * 3600e3);
-  setTime(w && w.bestT ? w.bestT : noon, { from: 'day' });
+// ---------- weekly skim outlook ----------
+const week = createWeek($('#weekPanel'), { onPick: pickWeekDay });
+let outlook = null;
+function renderWeek() {
+  const pending = spots.some(s => state.results[s.id] === undefined);
+  outlook = weekOutlook(state.results, spots);
+  week.render(outlook, { pending, sel: weekSel() });
+}
+function weekSel() {
+  const r = current();
+  return r ? { dayIndex: viewDay(r, state.selT).index, spotId: state.spotId } : null;
+}
+function markWeek() { // highlight the day being looked at, without rebuilding the row
+  const sel = weekSel();
+  for (const b of document.querySelectorAll('#weekPanel .wk-day')) b.classList.toggle('on', !!sel && +b.dataset.wday === sel.dayIndex);
+}
+/** A weekly day: switch to that day's best rated spot and select its best skim time. Forecast
+ *  time never touches the camera; a different spot shows that spot's live camera. */
+function pickWeekDay(i) {
+  const b = outlook?.days[i]?.best; if (!b) return;
+  if (b.spot.id === state.spotId) return setTime(b.w.bestT, { from: 'week' });
+  state.selT = b.w.bestT; // renderConditions() syncs everything to it after the switch
+  select(b.spot.id);
 }
 
 const tideGraph = createTideGraph($('#tideGraph'), { onPick: (t, o = {}) => setTime(t, { from: 'graph', dragging: !!o.dragging }) });
-const pirateCast = createPirateCast($('#piratecast'), { onSelect: (s, i) => setTime(i === 0 ? null : s.t, { from: 'cast' }) });
 const windMap = createWindMap($('#windmapPanel'), { onSelectSpot: id => select(id) });
 const dayGraph = createDayGraph($('#dayGraph'), { onPick: (t, o = {}) => setTime(t, { from: 'graph', dragging: !!o.dragging, step: o.step || 0 }) });
 const timeDock = createTimeDock($('#timedock'), {
   onPick: (t, o = {}) => setTime(t, { from: 'dock', dragging: !!o.dragging, step: o.step || 0 }),
-  onDay: pickDay, onNow: () => setTime(null, { from: 'now' }),
+  onNow: () => setTime(null, { from: 'now' }),
   zone: { top: $('#piratecastPanel'), bottom: $('#windmapPanel .wm-map') },
 });
 
@@ -241,8 +255,7 @@ function renderConditions(spotSwitch = false) {
   if (r === undefined || r === 'error') {
     $('#score').className = 'score';
     $('#score').innerHTML = r === 'error' ? '<p class="na">Conditions temporarily unavailable</p>' : '<p class="na loading">Loading conditions…</p>';
-    $('#window').hidden = true;
-    for (const id of ['#tideSummary', '#tideGraph', '#piratecast', '#pcReadout', '#details']) $(id).innerHTML = '';
+    for (const id of ['#tideSummary', '#tideGraph', '#dayGraph', '#details']) $(id).innerHTML = '';
     tideGraph.reset();
     timeDock.refresh();
     return;
@@ -250,11 +263,9 @@ function renderConditions(spotSwitch = false) {
   if (state.selT && state.selT < r.now) state.selT = null;
   const prevScore = spotSwitch ? parseFloat($('#score .num')?.dataset.v) : NaN; // for the spot-switch count-up
   mountScore($('#score'), r);
-  renderWindow($('#window'), r, { onPick: t => { setTime(t, { from: 'window' }); $('#piratecastPanel').scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'nearest' }); } });
   tideGraph.reset();
   lastDayKey = '';
-  pirateCast.render(r, state.selT);          // silent: positions the highlight
-  setTime(state.selT, { from: 'cast' });     // then sync everything to the shared time
+  setTime(state.selT, { from: 'spot' });     // sync everything to the shared time
   if (spotSwitch) { // count card + dock up together from the previous spot's score (never diverges)
     const card = $('#score .num'), dockNum = $('#timedock [data-c=score]'), to = parseFloat(card?.dataset.v);
     const pre = dockNum && dockNum.textContent.startsWith('≈') ? '≈' : '';
@@ -273,7 +284,6 @@ window.addEventListener('resize', () => {
   resizeT = setTimeout(() => { const r = current(); if (r) { tideGraph.render(r, state.selT || r.now, { force: true }); lastDayKey = ''; setTime(state.selT, { from: 'resize' }); } }, 150);
 });
 
-$('#window').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('#window').click(); } });
 
 // ---------- cam only ----------
 function setCamOnly(on) {
@@ -296,7 +306,7 @@ function syncFavorite() {
 $('#favBtn').addEventListener('click', () => { prefs.favorite = prefs.favorite === state.spotId ? null : state.spotId; syncFavorite(); });
 
 // Test hook, only with ?debug in the URL.
-if (new URLSearchParams(location.search).has('debug')) window.__pv = { state, windMap, setTime };
+if (new URLSearchParams(location.search).has('debug')) window.__pv = { state, windMap, setTime, get outlook() { return outlook; } };
 
 // ---------- start ----------
 const first = initialRoute();

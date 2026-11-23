@@ -7,4 +7,6 @@ export const prefs = {
   set favorite(id) { set('favorite', id); },
   get camOnly() { return get('camOnly') === '1'; },
   set camOnly(on) { set('camOnly', on ? '1' : null); },
+  get mapMode() { return get('mapMode'); },
+  set mapMode(m) { set('mapMode', m); },
 };

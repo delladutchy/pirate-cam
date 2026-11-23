@@ -129,21 +129,25 @@ export function scoreSample(profile, s) {
   return { score, label: L.label, tone: L.tone, reasons: [...pos, ...neg], factors, confidence: wsum / (w.tide + w.wind + w.waves) };
 }
 
+// A sample a window may use: scored and inside the skimmable daylight window (1 h after
+// sunrise → 1 h before sunset; skim.js). Samples built without that flag fall back to daylight.
+const usable = x => (x.skimmable ?? x.daylight) && x.score != null;
+
 /**
- * samples: [{ t: Date, score, daylight }] in time order, first = now.
- * Always returns the strongest upcoming daylight opportunity, with its real
+ * samples: [{ t: Date, score, daylight, skimmable }] in time order, first = now.
+ * Always returns the strongest upcoming skim-hours opportunity, with its real
  * rating — a POOR best window is still shown, labelled as POOR.
  *  - Prefers the SOONEST stretch close to the best of the period, so
  *    "this afternoon" beats "slightly better tomorrow".
- *  - state: 'now' (window includes now) | 'next' | 'unknown' (no daylight scores)
+ *  - state: 'now' (window includes now) | 'next' | 'unknown' (no skim-hours scores)
  */
 export function bestWindow(samples) {
-  const ok = x => x.daylight && x.score != null;
+  const ok = usable;
   const day = samples.filter(ok);
   if (!day.length) return { state: 'unknown' };
   const best = day.reduce((a, b) => (b.score > a.score ? b : a));
   const thr = best.score - 1;
-  // first daylight stretch reaching within 1 point of the best
+  // first skim-hours stretch reaching within 1 point of the best
   let a = samples.findIndex(x => ok(x) && x.score >= thr);
   let b = a;
   while (b < samples.length - 1 && ok(samples[b + 1]) && samples[b + 1].score >= thr) b++;
@@ -152,22 +156,22 @@ export function bestWindow(samples) {
 }
 
 /**
- * DAY'S BEST: the window around the single highest-scoring daylight moment of `samples`
+ * DAY'S BEST: the window around the single highest-scoring skim-hours moment of `samples`
  * (one day). Ties go to the earlier moment. Same tightening as bestWindow. Used for the
  * day buttons, the day graph's BEST band and day-specific wording; bestWindow (earliest
  * good-enough opportunity) stays the "Best next window" / Go-Wait logic.
  */
 export function dayBestWindow(samples) {
-  const ok = x => x.daylight && x.score != null;
+  const ok = usable;
   const day = samples.filter(ok);
   if (!day.length) return { state: 'unknown' };
   const peak = day.reduce((a, b) => (b.score > a.score ? b : a)); // strict > keeps the earliest tie
   return windowAround(samples, peak);
 }
 
-// Tighten a window around its peak: neighbouring daylight samples within 0.7 of the peak.
+// Tighten a window around its peak: neighbouring skim-hours samples within 0.7 of the peak.
 function windowAround(samples, peak) {
-  const ok = x => x.daylight && x.score != null;
+  const ok = usable;
   const near = peak.score - 0.7;
   const pi = samples.indexOf(peak);
   let a = pi, b = pi;

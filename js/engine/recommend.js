@@ -4,6 +4,7 @@
 // when it actually reaches GOOD; weaker best windows are described as what they are.
 import { time, hour } from '../ui/format.js';
 import { LABELS, labelFor } from './score.js';
+import { nextSkimRange } from './skim.js';
 
 const hourWord = d => hour(d).replace('a', ' AM').replace('p', ' PM');
 const MIN = Object.fromEntries(LABELS.map(l => [l.label, l.min]));
@@ -27,14 +28,13 @@ const partialScore = w => (w.peak && w.peak.waves == null ? `Scores ${tag(w)} on
  * cond: built conditions; s: the selected sample; t: selected time (null = now);
  * w: the best window for the selected day (from bestWindow), or null.
  * Returns { kind: 'go'|'wait'|'prime'|'best'|'later'|'weaken'|'poor'|'none'|'dark'|'nodata', head, sub }.
+ * Outside the skim window the answer is 'dark': darkness is not POOR, it's outside skim hours.
  */
 export function recommendFor(cond, s, t, w) {
   const isNow = !t;
-  if (s.score == null) {
-    return cond.score.reason === 'not-configured'
-      ? { kind: 'none', head: 'Not rated yet', sub: 'This spot has no skim profile yet.' }
-      : { kind: 'nodata', head: 'Not enough data', sub: 'The forecast is missing inputs needed for a score at this time.' };
-  }
+  if (cond.score.reason === 'not-configured') return { kind: 'none', head: 'Not rated yet', sub: 'This spot has no skim profile yet.' };
+  if (s.skimmable === false) return outsideSkim(cond, s, t || cond.now);
+  if (s.score == null) return { kind: 'nodata', head: 'Not enough data', sub: 'The forecast is missing inputs needed for a score at this time.' };
   const at = t || cond.now;
   if (isNow) {
     const g = cond.window;
@@ -53,10 +53,6 @@ export function recommendFor(cond, s, t, w) {
     return { kind: 'poor', head: 'Poor conditions', sub: `Best available around ${hourWord(g.bestT)} (${tag(g)}).` };
   }
   const q = windowQuality(w);
-  if (!s.daylight) {
-    if (!w || !w.start || !(w.start > at)) return { kind: 'dark', head: 'After dark', sub: '' };
-    return { kind: 'dark', head: 'After dark', sub: q === 'good' || q === 'decent' ? `Best window starts ${time(w.start)}.` : `Best available from ${time(w.start)} (${tag(w)}).` };
-  }
   if (!w || !w.start || !q) return { kind: 'none', head: s.label, sub: '' };
   if (at >= w.start && at < w.end) {
     if (q === 'good' && !windowComplete(w)) return { kind: 'best', head: 'Best available window', sub: partialScore(w) };
@@ -72,4 +68,19 @@ export function recommendFor(cond, s, t, w) {
   }
   if (q === 'poor') return { kind: 'poor', head: 'Poor conditions', sub: `Poor all day; the best was ${time(w.start)} – ${time(w.end)} (${tag(w)}).` };
   return { kind: 'weaken', head: 'Past the best', sub: `Best was ${time(w.start)} – ${time(w.end)}; conditions weaken after ${time(w.end)}.` };
+}
+
+const etDay = d => d.toLocaleDateString('en-US', { timeZone: 'America/New_York' });
+const dayWord = (d, now) => (etDay(d) === etDay(now) ? 'today' : etDay(d) === etDay(new Date(now.getTime() + 864e5)) ? 'tomorrow' : d.toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'short' }));
+
+/** Wording for a time outside the skimmable daylight window (before 1 h after sunrise, after
+ *  1 h before sunset, or night). Points at the next skim window and, when there is one, the
+ *  next best window inside it. */
+export function outsideSkim(cond, s, at) {
+  const head = s.daylight ? 'Outside skim hours' : 'After dark';
+  const r = nextSkimRange(at, cond.skim || []);
+  const g = cond.window;
+  if (g && g.start && g.bestT > at && windowQuality(g)) return { kind: 'dark', head, sub: `Next best ${dayWord(g.bestT, cond.now)} ${hourWord(g.bestT)} (${tag(g)}).` };
+  if (r) return { kind: 'dark', head, sub: `Skim hours start ${dayWord(r.start, cond.now)} ${time(r.start)}.` };
+  return { kind: 'dark', head, sub: '' };
 }

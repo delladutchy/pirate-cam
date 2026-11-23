@@ -1,8 +1,10 @@
 // Turns raw source data into what the screen needs: current conditions (each
-// tagged obs / fcst / est), a 15-minute score timeline for the next 24 h, hourly
-// cells, the best window and a notification-ready summary. Pure: no fetching.
+// tagged obs / fcst / est), a 15-minute score timeline through day 7 (each step marked
+// with whether it falls inside the skimmable daylight window), the best window and a
+// notification-ready summary. Pure: no fetching.
 import { makeTide } from './tide.js';
 import { daylightRanges, isDaylight } from './sun.js';
+import { skimRanges, isSkimmable } from './skim.js';
 import { scoreSample, bestWindow, buildSummary } from './score.js';
 import { dayStart } from './days.js';
 import { windBetweenHours, confidenceOf } from './timeline.js';
@@ -24,6 +26,7 @@ export function buildConditions(spot, data, now = new Date()) {
   // Farther-out hours simply lack inputs (e.g. waves) and are scored or not on what exists.
   const from = new Date(now.getTime() - 6 * HOUR), to = dayStart(now, 7);
   const daylight = daylightRanges(from, to, spot.lat, spot.lon);
+  const skim = skimRanges(daylight); // 1 h after sunrise → 1 h before sunset, this spot's own sun times
   const grid = data.grid;
   const g = t => (grid ? grid.at(t) : {});
   const tideAt = t => (tide && tide.covers(t) ? tide.at(t) : null);
@@ -53,10 +56,11 @@ export function buildConditions(spot, data, now = new Date()) {
     energy: waves && waves.source === 'obs' ? shorebreakEnergy(waves.ft, waves.periodS) : null,
     pop: num(g0.pop), daylight: isDaylight(now, daylight),
   };
+  const wxFields = f => ({ sky: num(f.sky), wx: typeof f.wx === 'string' && f.wx ? f.wx : null });
 
   const nowSample = {
     t: now, tide: tideNow, wind, waves, pop: current.pop, thunder: num(g0.thunder), daylight: current.daylight,
-    airF: air ? air.f : null,
+    skimmable: isSkimmable(now, skim), airF: air ? air.f : null, ...wxFields(g0),
   };
   const nowScore = scoreSample(spot.profile, nowSample);
 
@@ -72,27 +76,20 @@ export function buildConditions(spot, data, now = new Date()) {
       wind: w && Number.isFinite(w.mph) ? { mph: w.mph, fromDeg: num(w.fromDeg), gustMph: num(w.gustMph), source: 'fcst' } : null,
       waves: f.waveFt != null ? { ft: f.waveFt, periodS: null, fromDeg: null, source: 'fcst' } : null,
       pop: num(f.pop), thunder: num(f.thunder), daylight: isDaylight(t, daylight),
-      airF: num(f.tempF),
+      skimmable: isSkimmable(t, skim), airF: num(f.tempF), ...wxFields(f),
     };
     timeline.push({ ...s, ...pickScore(scoreSample(spot.profile, s)) });
   }
 
-  // PirateCast cells: "now" + every whole hour for the next 36 h (night included, dimmed in the UI).
-  const etDay = d => d.toLocaleDateString('en-US', { timeZone: 'America/New_York' });
-  const hourly = [timeline[0]];
-  for (const s of timeline.slice(1)) {
-    if (s.t.getMinutes() !== 0 || s.t - now > 36 * HOUR) continue;
-    hourly.push({ ...s, newDay: etDay(s.t) !== etDay(hourly[hourly.length - 1].t) });
-  }
 
   for (const x of timeline) x.confidence = confidenceOf(x, now);
 
-  // The main Best Window / Go-Wait call keeps its 3-day horizon (unchanged behaviour);
-  // the extra days feed the day tabs and graph only.
+  // The main Best Window / Go-Wait call keeps its 3-day horizon; the extra days feed the
+  // weekly outlook and PirateCast. Windows only ever fall inside skim hours (score.js).
   const horizon = dayStart(now, 3);
   const window = nowScore.score == null ? { state: 'unknown' } : bestWindow(timeline.filter(x => x.t < horizon));
   return {
-    spot, now, current, score: nowScore, timeline, hourly, window, daylight, tide,
+    spot, now, current, score: nowScore, timeline, window, daylight, skim, tide,
     range: { from, to }, status: data.status,
     summary: buildSummary(spot, nowScore, window),
   };

@@ -1,13 +1,8 @@
-// Score card (follows the selected PirateCast time), best window, tide summary, details.
-import { time, range, hour, compass, ft, esc, SOURCE_TAG } from './format.js';
+// Score card (follows the selected PirateCast time), tide summary, details.
+import { time, hour, compass, ft, esc, SOURCE_TAG } from './format.js';
 import { setNumbers, cancelNumberTween, rotateTo } from './motion.js';
 
 const etDate = d => d.toLocaleDateString('en-US', { timeZone: 'America/New_York' });
-const dayWord = (d, now) => {
-  if (etDate(d) === etDate(now)) return 'Today';
-  if (etDate(d) === etDate(new Date(now.getTime() + 864e5))) return 'Tomorrow';
-  return d.toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'long' });
-};
 const wk = d => d.toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'short' });
 export const whenLabel = (s, cond) => (s === cond.timeline[0] ? 'Now' : `${etDate(s.t) === etDate(cond.now) ? '' : wk(s.t) + ' '}${hour(s.t).replace('a', ' AM').replace('p', ' PM')}`);
 /** Label for an exact selected time (null = now): "Now", "8 PM", "Sun 8:15 AM". */
@@ -49,7 +44,7 @@ export function mountScore(el, cond) {
       <div class="f"><span class="fk">Tide</span><span class="fv"><span><span data-f="tide">–</span><span class="fs" data-f="tidesub"></span></span></span></div>
       <div class="f"><span class="fk">Temp</span><span class="fv"><span><span data-f="air">–</span><span class="fs" data-f="airsub"></span></span></span></div>
     </div>
-    ${notCfg ? '' : '<p class="explain"></p><details class="why"><summary>Why this score?</summary><ul></ul><p class="fine">Pirate View estimate from NOAA data.</p></details>'}`;
+    ${notCfg ? '' : '<details class="why"><summary>Why this score?</summary><ul></ul><p class="fine">Pirate View estimate from NOAA data.</p></details>'}`;
 }
 
 const CONF = { high: 'High confidence', medium: 'Medium confidence', low: 'Low confidence' };
@@ -67,15 +62,15 @@ export function updateScore(el, cond, s, { onBackToNow, label, isNow = s === con
     el.querySelector('.lbltxt').textContent = s.label;
     const rs = s.reasons || [];
     el.querySelector('.why ul').innerHTML = rs.map(r => `<li class="${r.sign === '+' ? 'pos' : 'neg'}"><b>${r.sign === '+' ? '+' : '−'}</b>${esc(r.text)}</li>`).join('');
-    const pick = [...rs.filter(r => r.sign === '+').slice(0, 2), ...rs.filter(r => r.sign === '-').slice(0, 2)];
-    el.querySelector('.explain').innerHTML = pick.map(r => `<span class="${r.sign === '+' ? 'pos' : 'neg'}">${r.sign === '+' ? '+' : '−'} ${esc(r.text)}</span>`).join('');
+    el.querySelector('.why').style.visibility = '';
   } else if (el.querySelector('.num')) {
     cancelNumberTween();
-    el.className = 'score tone-none';
+    el.className = `score tone-none${s.outside ? ' outside' : ''}`;
     el.querySelector('.num').textContent = '–'; el.querySelector('.num').dataset.v = '';
-    el.querySelector('.lbltxt').textContent = 'Not enough data';
+    // outside skim hours is not a bad score — it's no skim forecast at all
+    el.querySelector('.lbltxt').textContent = s.outside ? (s.daylight ? 'Outside skim hours' : 'After dark') : 'Not enough data';
     el.querySelector('.why ul').innerHTML = '';
-    el.querySelector('.explain').textContent = s.daylight === false ? '' : 'Not enough forecast data for a score at this time.';
+    el.querySelector('.why').style.visibility = 'hidden'; // nothing to explain (the line above says why) — space kept so nothing jumps
   }
   const f = facts(s);
   const set = (k, v) => { el.querySelector(`[data-f=${k}]`).textContent = v; };
@@ -104,32 +99,6 @@ export function updateScore(el, cond, s, { onBackToNow, label, isNow = s === con
   if (hasDir) rotateTo(arrow, s.wind.fromDeg + 180); // arrow shows where the wind blows
 }
 
-// ---------- best window ----------
-export function renderWindow(el, cond, { onPick } = {}) {
-  const w = cond.window, now = cond.now;
-  el.className = 'window';
-  if (w.state === 'unknown') {
-    el.hidden = cond.score.reason === 'not-configured';
-    el.innerHTML = '<div class="kicker">Best next window</div><div class="mid muted">Not available</div>';
-    el.onclick = null;
-    return;
-  }
-  el.hidden = false;
-  const trend = { up: '↑', down: '↓', flat: '→' }[w.trend] || '';
-  const poor = w.bestScore < 5;
-  el.className = `window tone-${w.tone}`;
-  el.innerHTML = `
-    <div class="kicker ${w.state === 'now' ? 'go' : ''}">${w.state === 'now' ? 'Go now · best window' : 'Best next window'}</div>
-    <div class="wday">${dayWord(w.start, now)}</div>
-    <div class="mid">${range(w.start, w.end)}</div>
-    <div class="wscore"><b>${w.bestScore.toFixed(1)}</b><span class="lbl"><i></i>${w.label}</span>${trend ? `<span class="trend" title="Compared with now">${trend}</span>` : ''}</div>
-    <div class="sub">Peak around ${time(w.bestT)}</div>
-    <div class="sub">${esc(factSentence(w.peak))}</div>
-    ${poor ? '<div class="sub muted">Conditions stay poor — this is the best of it.</div>' : ''}`;
-  el.onclick = () => onPick && onPick(w.bestT);
-  el.title = 'Show this time in PirateCast';
-}
-
 // ---------- tide summary (follows selection) ----------
 export function renderTideSummary(el, cond, s, label) {
   if (!cond.tide || !s.tide) { el.innerHTML = ''; return; }
@@ -156,6 +125,8 @@ export function renderDetails(el, cond) {
   if (c.pop != null) h += row('Rain chance', `${Math.round(c.pop)}%`, 'NWS', 'fcst');
   const sr = cond.daylight.find(r => r.sunset > cond.now);
   if (sr) h += row(sr.sunrise > cond.now ? 'Sunrise' : 'Sunset', time(sr.sunrise > cond.now ? sr.sunrise : sr.sunset), '');
-  if (cond.score.score != null) h += row('Pirate Score', `${cond.score.score.toFixed(1)} ${cond.score.label}`, 'Pirate View', 'est');
+  const n0 = cond.timeline[0];
+  if (n0.skimmable === false && cond.score.reason !== 'not-configured') h += row('Pirate Score', c.daylight ? 'Outside skim hours' : 'After dark', cond.skim?.length ? 'Skim forecast: 1 h after sunrise to 1 h before sunset' : '');
+  else if (cond.score.score != null) h += row('Pirate Score', `${cond.score.score.toFixed(1)} ${cond.score.label}`, 'Pirate View', 'est');
   el.innerHTML = h;
 }
