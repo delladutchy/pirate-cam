@@ -225,7 +225,7 @@ test('a day where no rated spot has a complete forecast shows "–" (no winner)'
 });
 
 // ---------- weekly: no empty Today; weather symbols ----------
-import { wxCategory, wxIcon } from '../js/ui/wxicons.js';
+import { wxCategory, wxIcon, wxGlyph } from '../js/ui/wxicons.js';
 import { weatherHTML, weatherLine } from '../js/ui/week.js';
 test('Today drops out of the week once its skim window is over, and stays during it', () => {
   const night = makeCond('dewey'); // Sun 6:49 PM
@@ -248,10 +248,18 @@ test('weather symbols follow the NWS condition; the words stay as the accessible
   assert.match(svg, /aria-label="Rain"/); assert.match(svg, /<title>Rain<\/title>/); assert.match(svg, /currentColor/);
   assert.doesNotMatch(svg, /#[0-9a-f]{3,6}/i, 'monochrome: no colours baked in');
   assert.match(wxIcon(null), /aria-label="Weather not available"/);
-  // weekly: "58° [symbol] 94%", words kept for screen readers / tooltip
+  // weekly: one row "[symbol] 58° 94%", words kept for screen readers / tooltip
   const s = { airF: 58.2, sky: 90, wx: 'rain:definite', pop: 94 };
   const html = weatherHTML(s);
-  assert.match(html, /^58°<svg[^>]*wxi-rain/); assert.match(html, /94%/); assert.doesNotMatch(html.replace(/<title>.*?<\/title>|aria-label="[^"]*"/g, ''), /Rain/);
+  assert.match(html, /^<svg[^>]*wxi-rain[^]*<\/svg><span class="wk-temp">58°<\/span><span class="wk-pop">94%<\/span>$/);
+  assert.doesNotMatch(html.replace(/<title>.*?<\/title>|aria-label="[^"]*"/g, ''), /Rain/);
+  for (const [t, c] of Object.entries(cases)) { const g = wxGlyph(t); assert.match(g, new RegExp(`wxi-${c}`)); assert.doesNotMatch(g, /#[0-9a-f]{3,6}/i); }
+  assert.equal(wxGlyph('Something new'), '', 'unknown condition: no symbol…');
+  // one visual language: the PirateCast row (wxIcon) draws exactly the weekly cards' shapes (wxGlyph)
+  const body = x => x.slice(x.indexOf('</title>'));
+  for (const t of Object.keys(cases)) assert.equal(body(wxIcon(t)), body(wxGlyph(t)), `same symbol for ${t}`);
+  assert.match(wxIcon('Something new'), /wxi-unknown[^]*<line/, 'unknown in the row: a short dash, label kept');
+  assert.match(weatherHTML({ airF: 50, sky: null, wx: 'frost:likely', pop: null }), /wk-cond/, '…the word is shown instead');
   assert.equal(weatherLine(s), '58° · Rain · rain 94%');
   assert.equal(weatherHTML({ airF: null, sky: null, wx: null, pop: null }), '', 'nothing known → nothing shown');
   assert.doesNotMatch(weatherHTML({ airF: 50, sky: 10, wx: null, pop: 5 }), /%/, 'rain chance under 20% is not shown');

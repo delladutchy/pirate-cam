@@ -196,6 +196,7 @@ h1{font-family:'Pirata One',Georgia,serif;font-size:34px;letter-spacing:.5px}
 .wxc b{font-size:13.5px;font-weight:650;color:var(--text);margin-top:1px}
 .wxc .pp{font-size:10px;line-height:12px;height:12px;color:#9cc0da}
 .wxi{display:block;flex:0 0 auto;color:#a3adb6;overflow:visible}
+.wxi-gap{stroke:var(--wxbg,var(--bg))} /* partly: the thin gap between sun and cloud is the background */
 .wxi-rain,.wxi-storm,.wxi-snow{color:#9cc0da}
 .wxc.on b{color:var(--accent);text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--faint)}
 .wxc.on .wxi{color:var(--text)}
@@ -207,27 +208,32 @@ h1{font-family:'Pirata One',Georgia,serif;font-size:34px;letter-spacing:.5px}
 .wk-best{appearance:none;border:0;background:none;padding:2px 0;cursor:pointer;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;text-align:left}
 .wk-best .k{text-transform:uppercase;letter-spacing:.8px;font-size:10px;color:var(--firing)}
 .wk-best b{color:var(--text);font-weight:650}
-.wk-row{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(108px,1fr);gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px;overscroll-behavior-x:contain}
+.wk-row{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(128px,1fr);align-items:start;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px;overscroll-behavior-x:contain}
 .wk-row::-webkit-scrollbar{display:none}
-.wk-day{appearance:none;text-align:left;border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:9px 10px 8px;cursor:pointer;display:flex;flex-direction:column;gap:2px;min-width:0;transition:border-color var(--t),background var(--t)}
-.wk-day:hover{background:var(--panel2)}
-.wk-day.on{border-color:var(--accent);background:var(--panel2)}
+/* one fixed stack so every card puts the same thing at the same height: day · score+rating · spot · time · weather */
+.wk-day{appearance:none;text-align:left;border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:10px;padding:9px 12px 8px;cursor:pointer;display:grid;grid-template-columns:minmax(0,1fr);justify-items:start;align-content:start;row-gap:0;min-width:0;transition:border-color var(--t),background var(--t);--wxbg:var(--panel)}
+.wk-day:hover{background:var(--panel2);--wxbg:var(--panel2)}
+.wk-day.on{border-color:var(--accent);background:var(--panel2);--wxbg:var(--panel2)}
 .wk-day.top{box-shadow:inset 0 2px 0 rgba(143,227,198,.55)}
 .wk-day:disabled{cursor:default;opacity:.55}
-.wk-dn{font-size:10px;letter-spacing:.9px;text-transform:uppercase;color:var(--muted)}
+.wk-dn{font-size:10.5px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);line-height:14px}
 .wk-day.on .wk-dn{color:var(--text)}
-.wk-sc{display:flex;flex-direction:column;align-items:flex-start;gap:1px;white-space:nowrap;margin-top:2px;min-width:0}
-.wk-sc b{font-size:19px;font-weight:650;letter-spacing:-.4px;font-variant-numeric:tabular-nums;line-height:1.1}
-.wk-sc .lbl{font-size:9.5px;letter-spacing:.6px}
-.wk-sc .lbl i{width:6px;height:6px;flex-basis:6px}
-.wk-sp{font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.wk-t{font-size:12px;color:var(--accent);font-variant-numeric:tabular-nums}
-.wk-wx{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums;min-height:14px}
-.wk-wx .wxi{width:13px;height:13px}
-.wk-pop{color:#9cc0da;font-size:10.5px}
-.wk-na{font-size:11px;color:var(--faint);margin-top:6px}
+.wk-sc{display:flex;align-items:baseline;gap:6px;white-space:nowrap;margin-top:4px;min-width:0;max-width:100%}
+.wk-sc b{font-size:21px;font-weight:650;letter-spacing:-.4px;font-variant-numeric:tabular-nums;line-height:24px;color:var(--text)}
+/* the score itself carries the rating colour (same tone mapping as the score card); the word stays in aria-label */
+.wk-day.tone-firing .wk-sc b{color:var(--firing)}.wk-day.tone-great .wk-sc b{color:var(--great)}.wk-day.tone-good .wk-sc b{color:var(--good)}
+.wk-day.tone-ok .wk-sc b{color:var(--ok)}.wk-day.tone-maybe .wk-sc b{color:var(--maybe)}.wk-day.tone-poor .wk-sc b{color:var(--poor)}
+.wk-sp{font-size:13px;font-weight:600;color:var(--text);line-height:17px;margin-top:5px;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wk-t{font-size:12px;color:var(--accent);font-variant-numeric:tabular-nums;line-height:16px}
+.wk-wx{display:flex;align-items:center;gap:6px;justify-self:stretch;margin-top:7px;padding-top:6px;border-top:1px solid var(--line);font-size:12px;color:var(--accent);white-space:nowrap;font-variant-numeric:tabular-nums;min-height:22px;overflow:hidden}
+.wk-wx .wxg{width:15px;height:15px;flex:0 0 15px;color:var(--accent)}
+.wk-wx .wxi-gap{stroke:var(--wxbg)}
+.wk-temp{color:var(--text)}
+.wk-pop{color:#9cc0da;font-size:11.5px;margin-left:-1px}
+.wk-cond{color:var(--muted);font-size:11px;overflow:hidden;text-overflow:ellipsis}
+.wk-na{font-size:11px;color:var(--faint);margin-top:8px}
 .weekpanel .na{margin:4px 0}
-@media(max-width:650px){.wk-row{grid-auto-columns:104px;margin-right:-14px;padding-right:14px}}
+@media(max-width:650px){.wk-row{grid-auto-columns:128px;margin-right:-14px;padding-right:14px}.wk-day{padding:9px 11px 8px}.wk-sc{gap:5px}.wk-sc b{font-size:20px}}
 
 /* bottom time dock */
 .timedock{position:fixed;left:50%;bottom:calc(12px + env(safe-area-inset-bottom));transform:translate(-50%,24px);z-index:1100;width:min(600px,calc(100% - 20px));

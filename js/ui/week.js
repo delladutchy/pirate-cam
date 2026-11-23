@@ -3,7 +3,7 @@
 // BEST THIS WEEK line. Logic lives in engine/week.js; this only draws it and reports taps.
 import { esc, time } from './format.js';
 import { conditionText } from '../engine/weather.js';
-import { wxIcon } from './wxicons.js';
+import { wxGlyph } from './wxicons.js';
 
 const DOW = d => d.toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'short' });
 
@@ -19,14 +19,16 @@ export function weatherLine(s) {
   return bits.join(' · ');
 }
 
-/** The same weather drawn compactly: "58° [symbol] 94%". */
+/** The same weather drawn as one compact row: "[symbol] 58° 94%". The condition word is shown
+ *  only when there's no symbol for it (unknown category). */
 export function weatherHTML(s) {
   if (!s) return '';
   const c = conditionText(s.sky, s.wx);
-  const t = Number.isFinite(s.airF) ? `${Math.round(s.airF)}°` : '';
+  const t = Number.isFinite(s.airF) ? `<span class="wk-temp">${Math.round(s.airF)}°</span>` : '';
   const pop = Number.isFinite(s.pop) && s.pop >= 20 ? `<span class="wk-pop">${Math.round(s.pop)}%</span>` : '';
   if (!t && !c) return '';
-  return `${t}${c ? wxIcon(c) : ''}${pop}`;
+  const g = c ? wxGlyph(c) : '';
+  return `${g || (c ? `<span class="wk-cond">${esc(c)}</span>` : '')}${t}${pop}`;
 }
 
 export function createWeek(el, { onPick }) {
@@ -51,7 +53,7 @@ export function createWeek(el, { onPick }) {
       const aria = `${d.day.long}: best ${b.w.bestScore.toFixed(1)} ${b.w.label} at ${b.spot.name}, ${time(b.w.bestT)}${wx ? ', ' + wx : ''}${low ? ', low confidence' : ''}${isTop ? ', best this week' : ''}`;
       return `<button type="button" class="wk-day tone-${b.w.tone}${on}${isTop ? ' top' : ''}" data-wday="${i}" aria-label="${esc(aria)}">
         <span class="wk-dn">${label}</span>
-        <span class="wk-sc"><b>${low ? '≈' : ''}${b.w.bestScore.toFixed(1)}</b><span class="lbl"><i></i>${b.w.label}</span></span>
+        <span class="wk-sc"><b>${low ? '≈' : ''}${b.w.bestScore.toFixed(1)}</b></span>
         <span class="wk-sp">${esc(b.spot.name)}</span>
         <span class="wk-t">${time(b.w.bestT)}</span>
         <span class="wk-wx" title="${esc(wx)}">${wxh || '&nbsp;'}</span>
