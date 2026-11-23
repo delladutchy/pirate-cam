@@ -6,9 +6,10 @@ import { BASE, DETAIL, TOPO, VIEW } from './provider.js';
 import { mapMarkers, windPoints } from './model.js';
 import { createSpotField } from './windfield.js';
 import { createParticles } from './particles.js';
+import { createRadar } from './radar.js';
 import { reducedMotion } from '../ui/motion.js';
 import { prefs } from '../prefs.js';
-import { compass, esc } from '../ui/format.js';
+import { compass, esc, time } from '../ui/format.js';
 
 let leafletLoading = null;
 function loadLeaflet() {
@@ -32,7 +33,7 @@ export function createWindMap(section, { onSelectSpot }) {
   let L = null, map = null, particles = null, markers = {}, latest = null, onScreen = false, lastSpot = null, homeBounds = null;
   let satLayers = [], topoLayer = null, mode = prefs.mapMode === 'topo' ? 'topo' : 'sat';
   // tiny two-state style control: Satellite | Topo (the choice is remembered on this device)
-  const modeEl = section.querySelector('.wm-mode');
+  const modeEl = section.querySelector('.wm-style');
   function setMode(m) {
     mode = m;
     prefs.mapMode = m === 'topo' ? 'topo' : null;
@@ -46,6 +47,50 @@ export function createWindMap(section, { onSelectSpot }) {
   }
   modeEl?.addEventListener('click', e => { const b = e.target.closest('[data-mode]'); if (b && b.dataset.mode !== mode) setMode(b.dataset.mode); });
   setMode(mode);
+
+  // WIND | RADAR. Radar is observed and recent; it never follows the forecast time. Nothing is
+  // requested until Radar is chosen (and the map exists). Always starts in Wind.
+  const layerEl = section.querySelector('.wm-layer');
+  let layer = 'wind', radar = null, rbar = null, rstate = { status: 'off' };
+  function radarLabel() {
+    if (rstate.status === 'unavailable') return 'Radar unavailable';
+    // a forecast time is selected elsewhere: say plainly that radar is observed, not that time
+    if (rstate.t) return `RADAR · ${time(rstate.t)}${latest && latest.t ? ' · observed' : ''}`;
+    return 'Radar · loading…';
+  }
+  function renderLayerUI() {
+    mapEl.classList.toggle('radar', layer === 'radar');
+    section.querySelector('.cr-radar')?.toggleAttribute('hidden', layer !== 'radar');
+    section.classList.toggle('radar-on', layer === 'radar'); // wind caption keeps its space (controls stay put), just not shown
+    if (layer === 'radar') {
+      timeEl.textContent = radarLabel();
+      timeEl.title = latest && latest.t ? `Observed radar — it does not follow the selected forecast time (${latest.label})` : 'Latest observed radar';
+      timeEl.classList.toggle('na', rstate.status === 'unavailable');
+    } else { timeEl.classList.remove('na'); timeEl.removeAttribute('title'); if (latest) timeEl.textContent = latest.label; }
+    if (!rbar) return;
+    rbar.hidden = layer !== 'radar' || rstate.status === 'unavailable' || (!rstate.t && rstate.status !== 'loading');
+    const btn = rbar.querySelector('.rb-play');
+    btn.textContent = rstate.playing ? 'Pause' : 'Play';
+    btn.setAttribute('aria-label', rstate.playing ? 'Pause the radar loop' : 'Play the last hour of radar');
+    btn.disabled = !rstate.t;
+  }
+  function setLayer(l) {
+    layer = l;
+    layerEl?.querySelectorAll('[data-layer]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.layer === l)));
+    if (map) {
+      particles?.setActive(onScreen && l === 'wind');
+      if (l === 'radar') { if (!radar) makeRadar(); radar.enable(); } else radar?.disable();
+    }
+    renderLayerUI();
+  }
+  function makeRadar() {
+    radar = createRadar(map, L, { reduced: reducedMotion, onState: s => { rstate = s; renderLayerUI(); } });
+    rbar = L.DomUtil.create('div', 'wm-radarbar', mapEl);
+    rbar.innerHTML = '<button type="button" class="rb-play">Play</button>';
+    L.DomEvent.disableClickPropagation(rbar);
+    rbar.querySelector('.rb-play').addEventListener('click', () => (rstate.playing ? radar.pause() : radar.play()));
+  }
+  layerEl?.addEventListener('click', e => { const b = e.target.closest('[data-layer]'); if (b && b.dataset.layer !== layer) setLayer(b.dataset.layer); });
   const coarse = window.matchMedia?.('(pointer: coarse)').matches;
 
   // lazy init
@@ -72,8 +117,9 @@ export function createWindMap(section, { onSelectSpot }) {
     // desktop: Ctrl/⌘ + wheel zooms (plain wheel keeps scrolling the page)
     mapEl.addEventListener('wheel', e => { if (e.ctrlKey || e.metaKey) { e.preventDefault(); map.setZoom(map.getZoom() + (e.deltaY < 0 ? 1 : -1)); } }, { passive: false });
 
-    new IntersectionObserver(es => { onScreen = es.some(e => e.isIntersecting); particles.setActive(onScreen); }, { threshold: 0.05 }).observe(mapEl);
+    new IntersectionObserver(es => { onScreen = es.some(e => e.isIntersecting); particles.setActive(onScreen && layer === 'wind'); }, { threshold: 0.05 }).observe(mapEl);
     if (latest) apply(false);
+    if (layer === 'radar') setLayer('radar'); // chosen before the map existed
   }
 
   // Phones: the map starts "locked" so a swipe over it scrolls the page. Tap to pan & pinch.
@@ -120,7 +166,7 @@ export function createWindMap(section, { onSelectSpot }) {
     }
     // captions
     const sel = pts.find(p => p.id === spotId);
-    timeEl.textContent = label;
+    if (layer === 'radar') renderLayerUI(); else timeEl.textContent = label;
     const spot = spots.find(s => s.id === spotId);
     infoEl.textContent = sel ? `${spot.name} · ${compass(sel.fromDeg)} ${Math.round(sel.mph)} mph` : pts.length ? '' : 'Wind unavailable';
   }
@@ -130,5 +176,7 @@ export function createWindMap(section, { onSelectSpot }) {
     get ready() { return !!map; },
     get particles() { return particles; },
     get map() { return map; },
+    get radar() { return radar; },
+    get layer() { return layer; },
   };
 }

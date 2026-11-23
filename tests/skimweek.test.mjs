@@ -223,3 +223,36 @@ test('a day where no rated spot has a complete forecast shows "–" (no winner)'
   assert.equal(o.top, null);
   assert.ok(o.days.slice(1).every(d => spotDayBest(noWaves, d.day)?.complete === false), 'the spot itself still has an (incomplete) day best to show');
 });
+
+// ---------- weekly: no empty Today; weather symbols ----------
+import { wxCategory, wxIcon } from '../js/ui/wxicons.js';
+import { weatherHTML, weatherLine } from '../js/ui/week.js';
+test('Today drops out of the week once its skim window is over, and stays during it', () => {
+  const night = makeCond('dewey'); // Sun 6:49 PM
+  const o = weekOutlook({ dewey: night }, spots);
+  assert.equal(o.todayOver, true); assert.equal(o.days[0].best, null);
+  const morning = makeCond('dewey', { now: new Date('2026-11-23T15:00Z') }); // Mon 10 AM, inside skim hours
+  const om = weekOutlook({ dewey: morning }, spots);
+  assert.equal(om.todayOver, false); assert.ok(om.days[0].best, 'Today shows the best remaining usable opportunity');
+  assert.ok(om.days[0].best.w.bestT >= morning.now);
+  const early = makeCond('dewey', { now: new Date('2026-11-23T11:00Z') }); // Mon 6 AM, before skim hours
+  assert.equal(weekOutlook({ dewey: early }, spots).todayOver, false);
+});
+
+test('weather symbols follow the NWS condition; the words stay as the accessible name', () => {
+  const cases = { Sunny: 'clear', 'Mostly sunny': 'partly', 'Partly sunny': 'partly', 'Mostly cloudy': 'cloudy', Cloudy: 'cloudy',
+    Rain: 'rain', Showers: 'rain', Drizzle: 'rain', 'T-storms': 'storm', Fog: 'fog', Haze: 'fog', Snow: 'snow', 'Snow showers': 'snow', 'Freezing rain': 'rain' };
+  for (const [t, c] of Object.entries(cases)) assert.equal(wxCategory(t), c, t);
+  assert.equal(wxCategory(null), 'unknown'); assert.equal(wxCategory('Something new'), 'unknown');
+  const svg = wxIcon('Rain');
+  assert.match(svg, /aria-label="Rain"/); assert.match(svg, /<title>Rain<\/title>/); assert.match(svg, /currentColor/);
+  assert.doesNotMatch(svg, /#[0-9a-f]{3,6}/i, 'monochrome: no colours baked in');
+  assert.match(wxIcon(null), /aria-label="Weather not available"/);
+  // weekly: "58° [symbol] 94%", words kept for screen readers / tooltip
+  const s = { airF: 58.2, sky: 90, wx: 'rain:definite', pop: 94 };
+  const html = weatherHTML(s);
+  assert.match(html, /^58°<svg[^>]*wxi-rain/); assert.match(html, /94%/); assert.doesNotMatch(html.replace(/<title>.*?<\/title>|aria-label="[^"]*"/g, ''), /Rain/);
+  assert.equal(weatherLine(s), '58° · Rain · rain 94%');
+  assert.equal(weatherHTML({ airF: null, sky: null, wx: null, pop: null }), '', 'nothing known → nothing shown');
+  assert.doesNotMatch(weatherHTML({ airF: 50, sky: 10, wx: null, pop: 5 }), /%/, 'rain chance under 20% is not shown');
+});

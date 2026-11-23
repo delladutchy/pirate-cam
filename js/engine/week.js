@@ -7,6 +7,7 @@
 // COMPLETE forecast (tide + wind + waves all present) can win a day or the week. Pure.
 import { dayBestWindow } from './score.js';
 import { forecastDays } from './days.js';
+import { skimRangeFor } from './skim.js';
 
 /** A loaded result for a spot with a skim profile. */
 export const isRated = r => !!r && r !== 'error' && r.score?.reason !== 'not-configured';
@@ -32,9 +33,11 @@ export function spotDayBest(cond, day) {
 
 /**
  * results: { [spotId]: conditions | 'error' }, spots: config order (breaks ties).
- * Returns { days: [{ day, best: { spot, w, sample } | null }], top: { dayIndex, spot, w, sample } | null, rated }
+ * Returns { days: [{ day, best: { spot, w, sample } | null }], top: { dayIndex, spot, w, sample } | null, rated, todayOver }
  * or null when no rated spot has loaded. Ties: higher score, then earlier time, then spot order.
  * A day where no rated spot has a complete forecast has best = null (shown "–").
+ * todayOver: today's skim window (1 h after sunrise → 1 h before sunset) has ended — the row
+ * then leaves Today out instead of showing an empty card.
  */
 export function weekOutlook(results, spots, count = 7) {
   const rated = spots.filter(s => isRated(results[s.id]));
@@ -54,5 +57,6 @@ export function weekOutlook(results, spots, count = 7) {
   });
   let top = null;
   out.forEach((d, i) => { if (d.best && better(d.best, top)) top = { dayIndex: i, ...d.best }; });
-  return { days: out, top, rated: rated.map(s => s.id) };
+  const r0 = skimRangeFor(days[0], ref.skim || []);
+  return { days: out, top, rated: rated.map(s => s.id), todayOver: !r0 || r0.end < ref.now };
 }

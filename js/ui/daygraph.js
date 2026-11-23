@@ -8,6 +8,7 @@
 // - Drag (mouse or finger) or tap anywhere on the graph; ← → keys step 15 min / 1 h.
 import { hour, short, time } from './format.js';
 import { conditionText } from '../engine/weather.js';
+import { wxIcon } from './wxicons.js';
 
 const HOUR = 3600e3;
 export const band = s => (s >= 7 ? 'g' : s >= 5 ? 'a' : 'r');
@@ -109,8 +110,10 @@ export function createDayGraph(el, { onPick }) {
     const row = !any ? '<div class="dg-wx none">Weather forecast not available for these hours</div>'
       : `<div class="dg-wx" aria-label="Weather by hour"><span class="wx-k" aria-hidden="true">Weather</span>${wx.map(x => {
         const pct = X(x.t.getTime()) / W * 100;
-        const pop = x.pop != null && x.pop >= 10 ? `<span class="pp">${x.pop}%</span>` : '';
-        return `<div class="wxc" style="left:${pct.toFixed(2)}%" data-t="${x.t.getTime()}"><span class="wt">${hour(x.t)}</span><b>${x.temp != null ? x.temp + '°' : '–'}</b><span class="wd">${x.cond || '–'}</span>${pop}</div>`;
+        const pop = x.pop != null && x.pop >= 10 ? `${x.pop}%` : '';
+        const words = [x.cond || 'Weather not available', x.temp != null ? `${x.temp}°` : '', pop ? `rain ${pop}` : ''].filter(Boolean).join(', ');
+        // symbol · temperature · rain chance; the NWS wording is the accessible name and tooltip
+        return `<div class="wxc" style="left:${pct.toFixed(2)}%" data-t="${x.t.getTime()}" aria-label="${hour(x.t)}: ${words}" title="${words}">${wxIcon(x.cond)}<b>${x.temp != null ? x.temp + '°' : '–'}</b><span class="pp">${pop || '&nbsp;'}</span></div>`;
       }).join('')}</div>`;
     el.innerHTML = svg + row;
     // cells stay centred on their hour; one that would run past an edge is nudged just inside
@@ -141,25 +144,25 @@ export function createDayGraph(el, { onPick }) {
     m.style.transform = `translateX(${geo.X(t)}px)`;
     m.querySelector('.dg-dot').style.transform = `translateY(${y}px)`;
     m.querySelector('.dg-dot').style.opacity = near && near.score != null ? 1 : 0;
-    el.querySelector('svg').setAttribute('aria-valuetext', `${time(new Date(t))}${near && near.score != null ? ', Pirate Score ' + near.score.toFixed(1) : ', no score'}`);
+    el.querySelector('svg.daygraph').setAttribute('aria-valuetext', `${time(new Date(t))}${near && near.score != null ? ', Pirate Score ' + near.score.toFixed(1) : ', no score'}`);
   }
 
   const timeAt = clientX => {
-    const r = el.querySelector('svg').getBoundingClientRect();
+    const r = el.querySelector('svg.daygraph').getBoundingClientRect();
     const x = (clientX - r.left) * (geo.W / r.width);
     const t = geo.t0 + (x - geo.padL) / (geo.W - geo.padL - geo.padR) * (geo.t1 - geo.t0);
     return new Date(Math.min(geo.maxT, Math.max(geo.minT, Math.round(t / 9e5) * 9e5)));
   };
   el.addEventListener('pointerdown', e => {
-    if (!geo || !e.target.closest('svg')) return;
+    if (!geo || !e.target.closest('svg.daygraph')) return;
     drag = { id: e.pointerId, x0: e.clientX, y0: e.clientY, active: e.pointerType === 'mouse' };
-    if (drag.active) { el.querySelector('svg').setPointerCapture(e.pointerId); onPick(timeAt(e.clientX), { dragging: true }); }
+    if (drag.active) { el.querySelector('svg.daygraph').setPointerCapture(e.pointerId); onPick(timeAt(e.clientX), { dragging: true }); }
   });
   el.addEventListener('pointermove', e => {
     if (!drag || e.pointerId !== drag.id) return;
     if (!drag.active) {
       const dx = Math.abs(e.clientX - drag.x0), dy = Math.abs(e.clientY - drag.y0);
-      if (dx > 8 && dx > dy * 1.2) { drag.active = true; el.querySelector('svg').setPointerCapture(e.pointerId); } else return;
+      if (dx > 8 && dx > dy * 1.2) { drag.active = true; el.querySelector('svg.daygraph').setPointerCapture(e.pointerId); } else return;
     }
     e.preventDefault();
     onPick(timeAt(e.clientX), { dragging: true });
@@ -172,7 +175,7 @@ export function createDayGraph(el, { onPick }) {
     if (!geo || suppress) return;
     const c = e.target.closest('.wxc');
     if (c) return onPick(new Date(Math.min(geo.maxT, Math.max(geo.minT, +c.dataset.t))), { dragging: false });
-    if (e.target.closest('svg')) onPick(timeAt(e.clientX), { dragging: false });
+    if (e.target.closest('svg.daygraph')) onPick(timeAt(e.clientX), { dragging: false });
   });
   el.addEventListener('keydown', e => {
     if (!geo || !['ArrowLeft', 'ArrowRight'].includes(e.key)) return;

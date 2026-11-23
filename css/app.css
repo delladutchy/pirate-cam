@@ -189,17 +189,16 @@ h1{font-family:'Pirata One',Georgia,serif;font-size:34px;letter-spacing:.5px}
 .dg-legend .sw.best{margin-left:8px}
 
 /* time-aligned weather row under PirateCast (NWS forecast) */
-.dg-wx{position:relative;height:56px;margin:2px 0 0;border-top:1px solid #1a2128}
+.dg-wx{position:relative;height:60px;margin:2px 0 0;border-top:1px solid #1a2128}
 .dg-wx.none{height:auto;padding:8px 22px 0;font-size:11px;color:var(--faint)}
 .wx-k{position:absolute;left:0;top:4px;font-size:8.5px;letter-spacing:1px;text-transform:uppercase;color:var(--faint);pointer-events:none}
-.wxc{position:absolute;top:17px;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:1px;line-height:1.2;font-variant-numeric:tabular-nums;white-space:nowrap;cursor:pointer;padding:0 2px;border-radius:6px}
-.wxc .wt{display:none}
-.wxc b{font-size:13.5px;font-weight:650;color:var(--text)}
-.wxc .wd{font-size:11px;color:#a3adb6;max-width:84px;overflow:hidden;text-overflow:ellipsis}
-.wxc .pp{position:absolute;top:0;left:calc(100% - 2px);font-size:10px;color:#9cc0da}
+.wxc{position:absolute;top:14px;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:1px;line-height:1.2;font-variant-numeric:tabular-nums;white-space:nowrap;cursor:pointer;padding:0 2px;border-radius:6px}
+.wxc b{font-size:13.5px;font-weight:650;color:var(--text);margin-top:1px}
+.wxc .pp{font-size:10px;line-height:12px;height:12px;color:#9cc0da}
+.wxi{display:block;flex:0 0 auto;color:#a3adb6;overflow:visible}
+.wxi-rain,.wxi-storm,.wxi-snow{color:#9cc0da}
 .wxc.on b{color:var(--accent);text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--faint)}
-.wxc.on .wd{color:var(--text)}
-@media(max-width:500px){.wxc .wd{max-width:80px;font-size:10.5px}}
+.wxc.on .wxi{color:var(--text)}
 
 /* WEEKLY SKIM OUTLOOK: one quiet row — best rated spot & time per day */
 .weekpanel{margin-top:18px;padding-top:12px}
@@ -208,7 +207,7 @@ h1{font-family:'Pirata One',Georgia,serif;font-size:34px;letter-spacing:.5px}
 .wk-best{appearance:none;border:0;background:none;padding:2px 0;cursor:pointer;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;text-align:left}
 .wk-best .k{text-transform:uppercase;letter-spacing:.8px;font-size:10px;color:var(--firing)}
 .wk-best b{color:var(--text);font-weight:650}
-.wk-row{display:grid;grid-template-columns:repeat(7,minmax(108px,1fr));gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px;overscroll-behavior-x:contain}
+.wk-row{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(108px,1fr);gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px;overscroll-behavior-x:contain}
 .wk-row::-webkit-scrollbar{display:none}
 .wk-day{appearance:none;text-align:left;border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:9px 10px 8px;cursor:pointer;display:flex;flex-direction:column;gap:2px;min-width:0;transition:border-color var(--t),background var(--t)}
 .wk-day:hover{background:var(--panel2)}
@@ -223,10 +222,12 @@ h1{font-family:'Pirata One',Georgia,serif;font-size:34px;letter-spacing:.5px}
 .wk-sc .lbl i{width:6px;height:6px;flex-basis:6px}
 .wk-sp{font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .wk-t{font-size:12px;color:var(--accent);font-variant-numeric:tabular-nums}
-.wk-wx{font-size:10.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wk-wx{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums;min-height:14px}
+.wk-wx .wxi{width:13px;height:13px}
+.wk-pop{color:#9cc0da;font-size:10.5px}
 .wk-na{font-size:11px;color:var(--faint);margin-top:6px}
 .weekpanel .na{margin:4px 0}
-@media(max-width:650px){.wk-row{grid-template-columns:repeat(7,104px);margin-right:-14px;padding-right:14px}}
+@media(max-width:650px){.wk-row{grid-auto-columns:104px;margin-right:-14px;padding-right:14px}}
 
 /* bottom time dock */
 .timedock{position:fixed;left:50%;bottom:calc(12px + env(safe-area-inset-bottom));transform:translate(-50%,24px);z-index:1100;width:min(600px,calc(100% - 20px));
@@ -291,6 +292,17 @@ body.cam-only .timedock{display:none}
 .wm-mode{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden}
 .wm-mode button{appearance:none;border:0;background:none;color:var(--muted);font-size:11px;letter-spacing:.3px;padding:4px 10px;cursor:pointer;min-height:26px}
 .wm-mode button[aria-pressed=true]{background:var(--panel2);color:var(--text)}
+.wm-layer{margin-right:2px}
+.radar-on .wm-info{visibility:hidden}
+.wm-time.na{color:var(--muted)}
+/* RADAR mode: NOAA/NWS MRMS image under the markers; wind particles fade out */
+.wm-canvas{transition:opacity .25s ease}
+.wm-map.radar .wm-canvas{opacity:0}
+.wm-radar{image-rendering:auto}
+.wm-radarbar{position:absolute;z-index:800;left:10px;bottom:10px;display:flex;align-items:center;gap:8px;max-width:calc(100% - 90px)}
+.wm-radarbar[hidden]{display:none}
+.wm-radarbar .rb-play{appearance:none;border:1px solid var(--line);background:rgba(10,13,16,.82);color:var(--accent);border-radius:999px;padding:6px 12px;min-height:32px;font-size:11.5px;letter-spacing:.3px;cursor:pointer}
+.wm-radarbar .rb-play:disabled{opacity:.5;cursor:default}
 .wm-map.topo .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.82) saturate(.55) contrast(.92)}
 .wm-time{font-size:12px;color:var(--text);border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-variant-numeric:tabular-nums}
 .wm-map{position:relative;isolation:isolate;z-index:0;height:440px;border-radius:12px;overflow:hidden;border:1px solid var(--line);background:#0b1218}
