@@ -55,6 +55,7 @@ export function createWindMap(section, { onSelectSpot }) {
   function radarLabel() {
     if (rstate.status === 'unavailable') return 'Radar unavailable';
     // a forecast time is selected elsewhere: say plainly that radar is observed, not that time
+    if (rstate.t && rstate.empty) return 'RADAR · No precipitation in view'; // the scan for this view has no returns
     if (rstate.t) return `RADAR · ${time(rstate.t)}${latest && latest.t ? ' · observed' : ''}`;
     return 'Radar · loading…';
   }
@@ -64,7 +65,7 @@ export function createWindMap(section, { onSelectSpot }) {
     section.classList.toggle('radar-on', layer === 'radar'); // wind caption keeps its space (controls stay put), just not shown
     if (layer === 'radar') {
       timeEl.textContent = radarLabel();
-      timeEl.title = latest && latest.t ? `Observed radar — it does not follow the selected forecast time (${latest.label})` : 'Latest observed radar';
+      timeEl.title = (rstate.t && rstate.empty ? `Radar scan ${time(rstate.t)}: no returns in this view. ` : '') + (latest && latest.t ? `Observed radar — it does not follow the selected forecast time (${latest.label})` : 'Latest observed radar');
       timeEl.classList.toggle('na', rstate.status === 'unavailable');
     } else { timeEl.classList.remove('na'); timeEl.removeAttribute('title'); if (latest) timeEl.textContent = latest.label; }
     if (!rbar) return;
