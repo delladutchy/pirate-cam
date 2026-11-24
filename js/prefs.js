@@ -9,4 +9,7 @@ export const prefs = {
   set camOnly(on) { set('camOnly', on ? '1' : null); },
   get mapMode() { return get('mapMode'); },
   set mapMode(m) { set('mapMode', m); },
+  // ocean map: one JSON blob { layer, theme, base, buoys, motion, legend }
+  get ocean() { try { return JSON.parse(get('ocean') || '{}') || {}; } catch { return {}; } },
+  set ocean(o) { set('ocean', o ? JSON.stringify(o) : null); },
 };

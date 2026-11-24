@@ -3,7 +3,7 @@
 // fetches, parses and returns the latest usable observation as small JSON.
 // Cached at Vercel's edge for 10 minutes (NDBC updates every 30 min).
 
-const ALLOWED = new Set(['44084', '44009']);
+const ALLOWED = new Set(['44084', '44009', '44091', '44099']); // Pirate View spots' buoy + the ocean map's buoy overlay
 const COLS = ['YY', 'MM', 'DD', 'hh', 'mm', 'WDIR', 'WSPD', 'GST', 'WVHT', 'DPD', 'APD', 'MWD', 'PRES', 'ATMP', 'WTMP'];
 
 export function parseRealtime(text, now = Date.now()) {

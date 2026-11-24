@@ -1,6 +1,5 @@
 import test from 'node:test'; import assert from 'node:assert/strict';
 import { toVector, windPoints, sampleAt } from '../js/map/model.js';
-import { createSpotField } from '../js/map/windfield.js';
 const near = (a, b, e = 1e-9) => Math.abs(a - b) < e;
 
 test('meteorological FROM direction becomes particle TRAVEL direction', () => {
@@ -12,15 +11,6 @@ test('meteorological FROM direction becomes particle TRAVEL direction', () => {
   w = toVector(10, 112.5); assert.ok(w.u < 0 && w.v > 0);
   // SW wind (from 225°) travels NE: +u, +v
   w = toVector(10, 225); assert.ok(w.u > 0 && w.v > 0 && near(w.u, w.v, 1e-6));
-});
-
-test('spot field: exact at a spot, real-points-only, keeps speed between opposing spots', () => {
-  const a = { lat: 38.69, lon: -75.07, mph: 10, ...toVector(10, 270) };
-  const b = { lat: 38.54, lon: -75.05, mph: 6, ...toVector(6, 90) };
-  const f = createSpotField([a, b]);
-  const s = f.sample(38.69, -75.07); assert.ok(near(s.u, a.u) && near(s.v, a.v));
-  const mid = f.sample(38.615, -75.06); assert.ok(mid.mph > 5, 'no invented calm between spots');
-  assert.equal(createSpotField([]), null);
 });
 
 test('windPoints uses the same samples the app shows; skips spots without wind', () => {

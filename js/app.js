@@ -19,7 +19,7 @@ import { createWeek } from './ui/week.js';
 import { resolveSelection } from './engine/timeline.js';
 import { recommendFor } from './engine/recommend.js';
 import { compass } from './ui/format.js';
-import { createWindMap } from './map/windmap.js';
+import { createOceanMap } from './ocean/oceanmap.js';
 import { esc } from './ui/format.js';
 import { reducedMotion, countUp } from './ui/motion.js';
 import { prefs } from './prefs.js';
@@ -226,12 +226,12 @@ function pickWeekDay(i) {
 }
 
 const tideGraph = createTideGraph($('#tideGraph'), { onPick: (t, o = {}) => setTime(t, { from: 'graph', dragging: !!o.dragging }) });
-const windMap = createWindMap($('#windmapPanel'), { onSelectSpot: id => select(id) });
+const windMap = createOceanMap($('#oceanPanel'), { onSelectSpot: id => select(id) });
 const dayGraph = createDayGraph($('#dayGraph'), { onPick: (t, o = {}) => setTime(t, { from: 'graph', dragging: !!o.dragging, step: o.step || 0 }) });
 const timeDock = createTimeDock($('#timedock'), {
   onPick: (t, o = {}) => setTime(t, { from: 'dock', dragging: !!o.dragging, step: o.step || 0 }),
   onNow: () => setTime(null, { from: 'now' }),
-  zone: { top: $('#piratecastPanel'), bottom: $('#windmapPanel .wm-map') },
+  zone: { top: $('#piratecastPanel'), bottom: $('#oceanPanel .om-wrap'), avoid: $('#oceanPanel .om-wrap') }, // never over the ocean map: it has its own timeline
 });
 
 function updateMap() {
@@ -306,7 +306,7 @@ function syncFavorite() {
 $('#favBtn').addEventListener('click', () => { prefs.favorite = prefs.favorite === state.spotId ? null : state.spotId; syncFavorite(); });
 
 // Test hook, only with ?debug in the URL.
-if (new URLSearchParams(location.search).has('debug')) window.__pv = { state, windMap, setTime, get outlook() { return outlook; } };
+if (new URLSearchParams(location.search).has('debug')) window.__pv = { state, windMap, oceanMap: windMap, setTime, get outlook() { return outlook; } };
 
 // ---------- start ----------
 const first = initialRoute();

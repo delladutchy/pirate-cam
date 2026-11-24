@@ -141,8 +141,12 @@ export function createTimeDock(dock, { onPick, onNow, zone }) {
     const laidOut = tr.height > 0 && br.height > 0 && !document.body.classList.contains('cam-only'); // hidden while loading / cam-only
     // stop at the map's bottom edge: the credits line and all text sit below it, so they never meet the dock
     const top = tr.top, bottom = br.bottom;
-    const wantShow = laidOut && top < band - HYST && bottom > vh + HYST;
-    const mustHide = !laidOut || top > band || bottom < vh + 4;
+    // gone once `zone.avoid` (the ocean map, with its own timeline) is really in view — its top
+    // well above the dock's strip. While only its top edge peeks in, PirateCast keeps the dock.
+    const av = zone.avoid?.getBoundingClientRect();
+    const overAvoid = !!av && av.height > 0 && av.top < band - 180 && av.bottom > band;
+    const wantShow = laidOut && !overAvoid && top < band - HYST && bottom > vh + HYST;
+    const mustHide = !laidOut || overAvoid || top > band || bottom < vh + 4;
     const next = drag?.active ? shown : shown ? !mustHide : wantShow;
     if (next !== shown) { shown = next; document.body.classList.toggle('dock-on', shown); }
   }

@@ -67,10 +67,12 @@
     <p class="legend"><span class="sw best"></span>Best window <span class="sw night"></span>Night <span class="sw now"></span>Now <span class="sw ph"></span>Selected</p>
   </section>
 
-  <section class="panel windmap" id="windmapPanel" aria-label="Wind map">
-    <div class="wmhead"><h3>Wind map</h3><span class="wm-info"></span><div class="wm-mode wm-layer" role="group" aria-label="Map layer"><button type="button" data-layer="wind" aria-pressed="true">Wind</button><button type="button" data-layer="radar" aria-pressed="false">Radar</button></div><div class="wm-mode wm-style" role="group" aria-label="Map style"><button type="button" data-mode="sat" aria-pressed="true">Satellite</button><button type="button" data-mode="topo" aria-pressed="false">Topo</button></div><span class="wm-time">Now</span></div>
-    <div class="wm-map" role="region" aria-label="Satellite map of the Delaware beaches with animated wind. Wind is blended from the real NOAA and NWS wind at the Pirate View spots, not a regional weather model."></div>
-    <p class="wm-credits"><span class="cr-sat"><a href="https://s2maps.eu" target="_blank" rel="noopener">Sentinel-2 cloudless - https://s2maps.eu</a> by <a href="https://eox.at" target="_blank" rel="noopener">EOX IT Services GmbH</a> (Contains modified Copernicus Sentinel data 2016 &amp; 2017) · <a href="https://www.usgs.gov/programs/national-geospatial-program/national-map" target="_blank" rel="noopener">USGS</a></span><span class="cr-topo" hidden>Topo: <a href="https://www.usgs.gov/programs/national-geospatial-program/national-map" target="_blank" rel="noopener">USGS The National Map</a> (3DEP Elevation, GNIS, Hydrography, Boundaries) · U.S. Census TIGER/Line · USFS Roads · Natural Earth · NOAA NCEI — shown in dark tones</span> · Wind: NOAA/NWS at Pirate View spots<span class="cr-radar" hidden> · Radar: <a href="https://www.weather.gov/radar" target="_blank" rel="noopener">NOAA/NWS MRMS</a> (observed)</span></p>
+  <section class="panel oceanmap" id="oceanPanel" aria-label="Ocean map">
+    <div class="omhead"><h3>Ocean map</h3></div>
+    <div class="om-wrap om-dark">
+      <div class="om-map" role="region" aria-label="Interactive ocean map of Delmarva: waves, wave period, wind, radar and sea temperature from NOAA data, with Pirate View spots and buoys. Tap the water for values; drag the timeline to move through the forecast."></div>
+    </div>
+    <p class="om-credits"></p>
   </section>
 
   <section class="panel detailpanel">
@@ -80,7 +82,7 @@
   </section>
 
   <footer class="help">
-    Cams: Angelcam, DelDOT · Map imagery: EOX Sentinel-2 cloudless 2016, USGS The National Map · Tides: NOAA CO-OPS · Wind, temps &amp; weather: NOAA CO-OPS, National Weather Service · Waves &amp; water: NOAA NDBC 44084 ·
+    Cams: Angelcam, DelDOT · Map imagery: EOX Sentinel-2 cloudless 2016, USGS The National Map, Natural Earth · Tides: NOAA CO-OPS · Wind, temps &amp; weather: NOAA CO-OPS, National Weather Service · Waves &amp; water: NOAA NDBC 44084 · Ocean map: NOAA GFS-Wave, NOAA GFS, MUR SST via NOAA CoastWatch, NOAA NDBC, NOAA/NWS MRMS via NOAA nowCOAST ·
     Pirate Score is a Pirate View estimate, not an official forecast — check the beach yourself.
   </footer>
 </main>

@@ -1,54 +1,76 @@
-// RADAR mode for the wind map: NOAA/NWS MRMS base reflectivity (the official time-enabled
-// service radar/radar_base_reflectivity_time on mapservices.weather.noaa.gov — US government
-// data, no key). Radar is OBSERVED and recent; it never follows the forecast time scrubber.
+// RADAR mode for the ocean map: NOAA/NWS MRMS quality-controlled base reflectivity (the CONUS
+// mosaic, ~1 km, a new scan every ~4 min) as published by NOAA nowCOAST — the official NOAA/NOS
+// map service, layer weather_radar:conus_base_reflectivity_mosaic. US government data, no key,
+// CORS-enabled. Radar is OBSERVED (past → latest scan); it never follows the forecast time.
+//
+// Why nowCOAST (verified live 2026-11-24 05:08Z, Delmarva view):
+//   nowCOAST WMS                — 120 scans / 7.9 h, every ~4.0 min, newest 7.9 min old, 15–70 KB PNG, ~160 ms
+//   mapservices ImageServer     — 16 scans / 1.7 h, every ~6–8 min, newest 12 min old, ~160 KB PNG, ~390 ms (old source)
+//   opengeo.ncep conus_bref_qcd — 60 scans / 2.0 h, every ~2 min, newest 2.4 min old
+//   Same MRMS scans (e.g. CONUS_L2_BREF_QCD 04:55:50Z appears in all three); nowCOAST keeps the
+//   longest history, so it is the only one that gives a useful several-hour loop.
 //
 // Cheap by design:
 //  - nothing is requested until Radar mode is opened (the map itself is already lazy);
-//  - each frame is ONE image for the current view (exportImage, CSS-pixel size, capped), locked
-//    to an exact radar scan by its raster id — not a tile pyramid;
-//  - Play loads a short loop (≤ 8 frames over ~75 min) once per view and then only swaps images;
-//    moving the map while playing stops and reloads the latest frame; while paused on an older
-//    scan it reloads THAT scan for the new view.
-//  - Each frame is checked for returns (any non-transparent pixel in the image of the view), so
-//    a dry view can say so instead of looking broken. Nothing is thresholded or filtered.
-//    That check is OPTIONAL: if the pixels can't be read (no CORS, tainted canvas, any error) the
-//    image is loaded and shown the plain way and the label is just the scan time. Only a failure
-//    to load the image itself makes radar "unavailable".
-//  - If NOAA can't be reached it says "Radar unavailable"; no other provider is substituted.
+//  - the scan list is the layer's own WMS capabilities (~10 KB): its time dimension lists every
+//    scan it holds. Only those exact times are ever requested (nowCOAST would otherwise snap an
+//    unlisted time to the nearest scan) — nothing is interpolated or invented;
+//  - each frame is ONE image for the current view (GetMap, CSS-pixel size, capped), fetched
+//    once and kept as a small encoded blob for that view (~15–70 KB), so scrubbing back and forth
+//    or replaying never re-downloads, and nothing decoded is held in memory;
+//  - images load on demand: the scan on screen, then a few neighbours; Play streams forward
+//    (each scan waits for its own image) instead of downloading the whole history at once;
+//  - moving the map while playing stops and reloads the latest frame; while paused on an older
+//    scan it reloads THAT scan for the new view;
+//  - each frame is checked for returns (any non-transparent pixel in the image of the view), so
+//    a dry view can say so instead of looking broken. Nothing is thresholded or filtered. That
+//    check is OPTIONAL: if the image can't be read (no CORS, tainted canvas, any error) it is
+//    shown the plain way and the label is just the scan time. Only a failure to load the image
+//    itself skips that scan / makes radar "unavailable";
+//  - if NOAA can't be reached it says so; no other provider is substituted.
 
-export const RADAR_SERVICE = 'https://mapservices.weather.noaa.gov/eventdriven/rest/services/radar/radar_base_reflectivity_time/ImageServer';
-export const RADAR_CREDIT = 'Radar: NOAA/NWS MRMS';
-const LIST_TTL = 2 * 60e3, MAX_PX = 900;
+export const RADAR_SERVICE = 'https://nowcoast.noaa.gov/geoserver/observations/weather_radar';
+export const RADAR_LAYER = 'conus_base_reflectivity_mosaic';
+export const RADAR_CREDIT = 'Radar: NOAA/NWS MRMS via NOAA nowCOAST';
+const LIST_TTL = 2 * 60e3, MAX_PX = 900, POLL = 4 * 60e3;
+export const RADAR_WINDOW_MS = 8 * 3600e3; // nowCOAST's rolling window (live: 120 scans ≈ 7.9 h)
 
-/** The CONUS scans the service holds, newest first: [{ id, t }]. */
-export function listUrl(count = 24) {
-  return `${RADAR_SERVICE}/query?where=${encodeURIComponent("name LIKE 'CONUS%'")}&outFields=objectid,idp_validtime&orderByFields=${encodeURIComponent('idp_validtime DESC')}&resultRecordCount=${count}&returnGeometry=false&f=json`;
+/** The layer's WMS capabilities: its time dimension is the list of scans it holds. */
+export function listUrl() {
+  return `${RADAR_SERVICE}/${RADAR_LAYER}/ows?service=WMS&version=1.3.0&request=GetCapabilities`;
 }
-export function parseList(json) {
-  if (!json || json.error || !Array.isArray(json.features)) return [];
-  return json.features.map(f => f.attributes).filter(a => a && Number.isFinite(a.objectid) && Number.isFinite(a.idp_validtime))
-    .map(a => ({ id: a.objectid, t: new Date(a.idp_validtime) })).sort((a, b) => b.t - a.t);
+/** Capabilities XML → the scans it lists, newest first: [{ id: exact ISO time, t: Date }]. */
+export function parseList(xml) {
+  if (typeof xml !== 'string') return [];
+  const at = xml.indexOf(`<Name>${RADAR_LAYER}</Name>`);
+  const m = /<Dimension\b[^>]*name="time"[^>]*>([^<]*)<\/Dimension>/.exec(at >= 0 ? xml.slice(at) : xml);
+  if (!m) return [];
+  return m[1].split(',').map(s => s.trim()).filter(s => /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?Z$/.test(s))
+    .map(id => ({ id, t: new Date(id) })).sort((a, b) => b.t - a.t);
 }
 
-/** Frames for the loop: the latest scan plus older ones at least `gapMs` apart, within `spanMs`,
- *  at most `count` — oldest first, so the loop ends on the latest. */
-export function pickFrames(scans, { count = 8, spanMs = 75 * 60e3, gapMs = 8 * 60e3 } = {}) {
+/** Every real scan within `spanMs` of the latest one (no thinning, no invented times), oldest
+ *  first so the history ends on the latest scan. Duplicate times are kept once. */
+export function pickFrames(scans, { spanMs = RADAR_WINDOW_MS } = {}) {
   if (!scans.length) return [];
-  const latest = scans[0].t.getTime(), out = [scans[0]];
-  for (const s of scans.slice(1)) {
-    if (out.length >= count) break;
+  const latest = scans[0].t.getTime(), out = [], seen = new Set();
+  for (const s of scans) {
     const t = s.t.getTime();
     if (latest - t > spanMs) break;
-    if (out.at(-1).t.getTime() - t >= gapMs) out.push(s);
+    if (seen.has(t)) continue;
+    seen.add(t); out.push(s);
   }
   return out.reverse();
 }
+
+/** Playback speed: a whole history plays in ~24 s, never faster than ~5 scans a second. */
+export const playStep = (n, reduced = false) => (reduced ? 1400 : Math.round(Math.max(180, Math.min(650, 24000 / Math.max(1, n)))));
 
 /** True when a decoded radar image (exactly the visible extent) has no returns at all: every
  *  pixel fully transparent. null when it can't be read (then the time is shown as usual). */
 export function isEmptyImage(img) {
   try {
-    const w = img.naturalWidth, h = img.naturalHeight;
+    const w = img.naturalWidth ?? img.width, h = img.naturalHeight ?? img.height;
     if (!w || !h) return null;
     const c = document.createElement('canvas'); c.width = w; c.height = h;
     const x = c.getContext('2d', { willReadFrequently: true });
@@ -59,24 +81,28 @@ export function isEmptyImage(img) {
   } catch { return null; }
 }
 
-/** One image of one exact scan for a Web-Mercator box. */
+/** One image of one exact scan (a time from the list) for a Web-Mercator box. */
 export function frameUrl(id, bbox, w, h) {
-  const mr = encodeURIComponent(JSON.stringify({ mosaicMethod: 'esriMosaicLockRaster', lockRasterIds: [id] }));
-  return `${RADAR_SERVICE}/exportImage?bbox=${bbox.map(v => Math.round(v)).join(',')}&bboxSR=3857&imageSR=3857&size=${w},${h}&format=png&transparent=true&mosaicRule=${mr}&f=image`;
+  return `${RADAR_SERVICE}/ows?service=WMS&version=1.3.0&request=GetMap&layers=${RADAR_LAYER}&styles=&format=image/png&transparent=true`
+    + `&crs=EPSG:3857&bbox=${bbox.map(v => Math.round(v)).join(',')}&width=${w}&height=${h}&time=${encodeURIComponent(id)}`;
 }
 
-export function createRadar(map, L, { onState = () => {}, reduced = () => false, fetchJSON = u => fetch(u).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }) } = {}) {
+export function createRadar(map, L, {
+  onState = () => {}, reduced = () => false,
+  fetchText = u => fetch(u).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); }),
+} = {}) {
   const pane = map.getPane('radar') || map.createPane('radar');
   pane.style.zIndex = 420; pane.style.pointerEvents = 'none'; // above the base map, below wind + markers
-  let on = false, empty = new Map(), scans = null, listAt = 0, view = null, overlay = null, frames = [], imgs = new Map(), idx = -1, timer = 0, playing = false, gen = 0;
+  let on = false, scans = null, listAt = 0, view = null, overlay = null, frames = [], imgs = new Map(), idx = -1, timer = 0, playing = false, gen = 0;
+  let retired = []; // blob URLs of a previous view, released once the new view is on screen
   let state = { status: 'off', t: null, playing: false };
   const set = patch => { state = { ...state, ...patch }; onState(state); };
 
-  async function loadList() {
-    if (scans && Date.now() - listAt < LIST_TTL) return scans;
-    scans = parseList(await fetchJSON(listUrl()));
-    listAt = Date.now();
-    if (!scans.length) throw new Error('no radar scans');
+  async function loadList(force = false) {
+    if (!force && scans && Date.now() - listAt < LIST_TTL) return scans;
+    const next = parseList(await fetchText(listUrl()));
+    if (!next.length) throw new Error('no radar scans');
+    scans = next; listAt = Date.now();
     return scans;
   }
 
@@ -84,65 +110,76 @@ export function createRadar(map, L, { onState = () => {}, reduced = () => false,
     const b = map.getBounds(), s = map.getSize();
     const sw = L.CRS.EPSG3857.project(b.getSouthWest()), ne = L.CRS.EPSG3857.project(b.getNorthEast());
     const k = Math.min(1, MAX_PX / Math.max(s.x, s.y)); // CSS pixels, capped: radar is ~1 km data, retina buys nothing
-    return { bounds: b, bbox: [sw.x, sw.y, ne.x, ne.y], w: Math.max(64, Math.round(s.x * k)), h: Math.max(64, Math.round(s.y * k)), key: `${map.getZoom()}|${b.toBBoxString()}` };
+    return { bounds: b, bbox: [sw.x, sw.y, ne.x, ne.y], w: Math.max(64, Math.round(s.x * k)), h: Math.max(64, Math.round(s.y * k)) };
   }
 
-  const loadImg = (url, cors) => new Promise((res, rej) => {
+  const loadImg = url => new Promise((res, rej) => {
     const img = new Image(); img.decoding = 'async';
-    if (cors) img.crossOrigin = 'anonymous';
     img.onload = () => res(img); img.onerror = () => rej(new Error('radar image'));
     img.src = url;
   });
-  // url → 'anonymous' when the image loaded with CORS (pixels readable), null when it had to be
-  // loaded plainly. The overlay requests it the same way, so the browser reuses the loaded copy.
-  let mode = new Map();
+  // One scan's image for the current view → { src, empty }. Normally fetched with CORS and kept
+  // as a blob URL (pixels readable → the dry-view check). If that fails for any reason, the image
+  // is loaded the plain way (fail open: shown, just not inspected). Both failing = this scan failed.
   function image(frame) {
     const url = frameUrl(frame.id, view.bbox, view.w, view.h);
     if (!imgs.has(url)) {
-      const p = loadImg(url, true)
-        .then(img => { mode.set(url, 'anonymous'); empty.set(url, isEmptyImage(img)); return url; },
-          () => loadImg(url, false).then(() => { mode.set(url, null); empty.set(url, null); return url; })); // pixels unreadable: still show it
+      const p = (async () => {
+        try {
+          const r = await fetch(url, { mode: 'cors' });
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          const blob = await r.blob();
+          if (!/^image\//.test(blob.type)) throw new Error('not an image'); // WMS errors arrive as XML
+          let empty = null;
+          try { const bmp = await createImageBitmap(blob); empty = isEmptyImage(bmp); bmp.close?.(); } catch { /* unreadable: no check */ }
+          return { src: URL.createObjectURL(blob), empty, blob: true };
+        } catch {
+          await loadImg(url);
+          return { src: url, empty: null, blob: false };
+        }
+      })();
+      p.catch(() => imgs.delete(url)); // a failed scan can be retried later
       imgs.set(url, p);
     }
     return imgs.get(url);
   }
+  const release = list => { for (const p of list) p.then(x => { if (x.blob && x.src !== overlay?._url) URL.revokeObjectURL(x.src); }, () => {}); };
 
-  function show(i) {
+  async function show(i) {
+    const rec = await image(frames[i]); // already loaded by the caller
     idx = i;
-    const url = frameUrl(frames[i].id, view.bbox, view.w, view.h);
-    const cors = mode.get(url) ?? null;
-    if (!overlay) overlay = L.imageOverlay(url, view.bounds, { pane: 'radar', opacity: 0.66, interactive: false, className: 'wm-radar', crossOrigin: cors ?? false }).addTo(map);
-    else {
-      const el = overlay.getElement();
-      if (el && el.crossOrigin !== cors) { if (cors) el.crossOrigin = cors; else el.removeAttribute('crossorigin'); }
-      overlay.setBounds(view.bounds); overlay.setUrl(url);
-    }
-    set({ t: frames[i].t, frame: i, frames: frames.length, empty: empty.get(url) === true });
+    if (!overlay) overlay = L.imageOverlay(rec.src, view.bounds, { pane: 'radar', opacity: 0.66, interactive: false, className: 'wm-radar' }).addTo(map);
+    else { overlay.setBounds(view.bounds); overlay.setUrl(rec.src); }
+    if (retired.length) { release(retired); retired = []; }
+    set({ t: frames[i].t, frame: i, frames: frames.length, empty: rec.empty === true });
   }
 
   /** The current view at the latest scan — or, when `holdId` is given (paused on an older scan),
-   *  at that same scan, keeping the loop's frames. */
-  async function refresh(holdId = null) {
+   *  at that same scan, keeping the history's frames. */
+  async function refresh(holdId = null, { force = false } = {}) {
     const my = ++gen;
     stop(false);
     set({ status: 'loading', playing: false });
     try {
       let i = holdId != null && frames.length ? frames.findIndex(f => f.id === holdId) : -1;
       if (i < 0) {
-        await loadList();
+        await loadList(force);
         if (my !== gen || !on) return;
         frames = pickFrames(scans);
         i = frames.length - 1;
       }
-      view = currentView(); imgs = new Map(); empty = new Map(); mode = new Map();
-      try { await image(frames[i]); } catch (e) {
-        if (holdId == null) throw e;
-        if (my === gen && on) refresh(); // that older scan is gone: fall back to the latest
-        return;
+      view = currentView(); retired.push(...imgs.values()); imgs = new Map();
+      // the newest scan may still be failing to render: fall back to the next newest that loads
+      for (;;) {
+        try { await image(frames[i]); break; } catch (e) {
+          if (holdId != null) { if (my === gen && on) refresh(); return; } // that older scan is gone: go to the latest
+          if (--i < 0 || frames.length - 1 - i > 3) throw e;
+        }
       }
       if (my !== gen || !on) return;
-      show(i);
+      await show(i);
       set({ status: 'ready' });
+      prefetch(i - 2, 2);
     } catch {
       if (my !== gen) return;
       if (overlay) { map.removeLayer(overlay); overlay = null; }
@@ -152,33 +189,35 @@ export function createRadar(map, L, { onState = () => {}, reduced = () => false,
 
   function stop(report = true) { clearTimeout(timer); timer = 0; playing = false; if (report) set({ playing: false }); }
 
+  // a few neighbouring scans, quietly (never the whole history at once)
+  function prefetch(i, ahead = 3) {
+    for (let k = 1; k <= ahead; k++) { const f = frames[((i + k) % frames.length + frames.length) % frames.length]; if (f) image(f).catch(() => {}); }
+  }
+
   async function play() {
-    if (!on || state.status !== 'ready' || playing) return;
+    if (!on || state.status !== 'ready' || playing || frames.length < 2) return;
     const my = gen;
-    playing = true; set({ playing: true, status: 'loading' });
-    try {
-      await Promise.all(frames.map(f => image(f))); // preload the loop once for this view
-    } catch {
-      // a missing older frame: keep the ones that loaded rather than fail the whole loop
-      const ok = [];
-      for (const f of frames) { try { await image(f); ok.push(f); } catch { /* skip */ } }
-      frames = ok.length ? ok : frames.slice(-1);
-    }
-    if (my !== gen || !playing) return;
-    set({ status: 'ready' });
-    const step = reduced() ? 1400 : 650, hold = 1600;
-    const tick = () => {
-      if (!playing) return;
-      const next = (idx + 1) % frames.length;
-      show(next);
+    playing = true; set({ playing: true });
+    if (idx >= frames.length - 1) idx = -1; // from the latest: start again at the oldest scan
+    const step = playStep(frames.length, reduced()), hold = 1600;
+    const tick = async () => {
+      if (!playing || my !== gen) return;
+      let next = (idx + 1) % frames.length;
+      prefetch(next, 5);
+      // stream: wait for THIS scan's image; a scan whose image fails is skipped, never faked
+      for (let tries = 0; tries < frames.length; tries++) {
+        try { await image(frames[next]); break; } catch { next = (next + 1) % frames.length; }
+      }
+      if (!playing || my !== gen) return;
+      await show(next);
       timer = setTimeout(tick, next === frames.length - 1 ? hold : step); // linger on the latest scan
     };
-    timer = setTimeout(tick, 200);
+    timer = setTimeout(tick, 150);
   }
 
   function pause() { stop(); } // holds the frame on screen; its time stays in the label
 
-  let moveT = 0;
+  let moveT = 0, gotoTicket = 0, poll = 0;
   // playing → stop on the latest scan; paused on an older scan → keep that scan; latest → latest.
   const onMove = () => {
     clearTimeout(moveT);
@@ -186,15 +225,33 @@ export function createRadar(map, L, { onState = () => {}, reduced = () => false,
     if (playing) stop();
     moveT = setTimeout(() => { if (on) refresh(hold); }, 250);
   };
+  // Sitting on the latest scan: look for a newer one every ~4 min (one ~10 KB request), so "latest"
+  // stays true. Never while playing, scrubbed back in time, or with the page hidden.
+  const tickPoll = () => {
+    if (!on || playing || state.status !== 'ready' || idx !== frames.length - 1 || document.hidden) return;
+    refresh(null, { force: true });
+  };
 
   return {
-    enable() { if (on) return; on = true; map.on('moveend', onMove); refresh(); },
+    enable() { if (on) return; on = true; map.on('moveend', onMove); poll = setInterval(tickPoll, POLL); refresh(); },
     disable() {
-      if (!on) return; on = false; gen++; stop(false); map.off('moveend', onMove);
+      if (!on) return; on = false; gen++; stop(false); map.off('moveend', onMove); clearInterval(poll);
       if (overlay) { map.removeLayer(overlay); overlay = null; }
-      imgs = new Map(); empty = new Map(); mode = new Map(); frames = []; idx = -1; set({ status: 'off', t: null, playing: false, empty: false });
+      release([...imgs.values(), ...retired]); retired = []; imgs = new Map();
+      frames = []; idx = -1; set({ status: 'off', t: null, playing: false, empty: false });
     },
     play, pause, refresh: () => refresh(),
+    /** Show scan i of the history (stops playback). For the ocean map's frame strip. */
+    async goto(i) {
+      if (!on || state.status !== 'ready' || !frames[i]) return;
+      if (playing) stop();
+      const my = gen, ticket = ++gotoTicket; // a newer goto (fast scrubbing) wins
+      try { await image(frames[i]); } catch { return; }
+      if (my === gen && on && ticket === gotoTicket) { await show(i); prefetch(i, 2); prefetch(i - 3, 2); }
+    },
+    /** The history's scans, oldest first: [{ t }] — read-only. */
+    get frames() { return frames.map(f => ({ t: f.t.getTime() })); },
+    get loaded() { return imgs.size; },
     get state() { return state; },
   };
 }
