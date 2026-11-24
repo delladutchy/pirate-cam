@@ -44,8 +44,9 @@ export function createWeek(el, { onPick }) {
       const b = d.best, label = i === 0 ? 'Today' : DOW(d.day.start).toUpperCase();
       const on = sel && sel.dayIndex === i ? ' on' : '';
       if (!b) {
-        const why = pending ? 'Loading…' : i === 0 ? 'No skim hours left' : 'Not enough data';
-        return `<button type="button" class="wk-day none${on}" data-wday="${i}" disabled aria-label="${esc(d.day.long)}: ${why}"><span class="wk-dn">${label}</span><span class="wk-na">${pending ? '…' : i === 0 ? 'Done' : '–'}</span></button>`;
+        const why = pending ? 'Loading…' : i === 0 ? 'No skim hours left' : 'No complete forecast yet (no nearshore wave forecast this far out)';
+        // same rows as a scored card (empty ones hidden) so every card in the week is the same height
+        return `<button type="button" class="wk-day none${on}" data-wday="${i}" disabled aria-label="${esc(d.day.long)}: ${why}"><span class="wk-dn">${label}</span><span class="wk-sc"><b class="wk-na">${pending ? '…' : i === 0 ? 'Done' : '–'}</b></span><span class="wk-sp" aria-hidden="true">&nbsp;</span><span class="wk-t" aria-hidden="true">&nbsp;</span><span class="wk-wx" aria-hidden="true">&nbsp;</span></button>`;
       }
       const low = b.sample?.confidence === 'low';
       const isTop = top && top.dayIndex === i;

@@ -11,6 +11,7 @@ import { recommendFor } from '../js/engine/recommend.js';
 import { conditionText, skyText, wxCode } from '../js/engine/weather.js';
 import { spots, spotById } from '../js/config/spots.js';
 import { sampleAt, mapMarkers } from '../js/map/model.js';
+import { fakeNwps } from './helpers/model.mjs';
 
 const H = 3600e3, Q = 15 * 60e3;
 const up = d => Math.ceil(d / Q) * Q, down = d => Math.floor(d / Q) * Q; // snaps land on the 15-min forecast grid, inside the window
@@ -58,7 +59,8 @@ function makeCond(spotId, { now = NOW, wave = 2, windMph = 6, windFrom = 290, ti
   const ev = []; let t = Date.parse('2026-11-21T03:00Z') + tideShift, hi = true;
   while (t < Date.parse('2026-12-02T00:00Z')) { ev.push({ t: new Date(t), v: hi ? 4.2 : 0.2, type: hi ? 'H' : 'L' }); t += 6.2 * H; hi = !hi; }
   const grid = { at: tt => { const h = (tt - Date.parse('2026-11-22T00:00Z')) / H; return { windMph: windMph + 3 * Math.sin(h / 7), gustMph: windMph + 6, windFromDeg: windFrom, pop: 10, thunder: 0, tempF: 50 + 8 * Math.sin((h - 14) / 24 * 2 * Math.PI), waveFt: wave, sky: 30, wx: '' }; } };
-  return buildConditions(spot, { tideEvents: ev, obsWind: null, obsAir: null, coopsWater: null, buoy: null, grid, status: { tide: true, wind: false, buoy: false, forecast: true } }, now);
+  // waves: the nearshore model (NWPS) the score uses — the same height every hour here
+  return buildConditions(spot, { tideEvents: ev, obsWind: null, obsAir: null, coopsWater: null, buoy: null, grid, nwps: fakeNwps(() => wave), status: { tide: true, wind: false, buoy: false, forecast: true } }, now);
 }
 
 test('no night-time Pirate Score selection: every window and DAY\'S BEST lies inside skim hours', () => {
@@ -185,30 +187,30 @@ test('hourly score carousel and the controller\'s day row are gone; weekly outlo
 // ---------- complete-data ranking ----------
 import { isComplete } from '../js/engine/week.js';
 test('an incomplete forecast (waves missing) cannot beat a complete one; PirateCast BEST prefers complete', () => {
-  // Bethany: waves only on Tuesday morning → Tuesday afternoon is incomplete
+  // Bethany: model waves only until Tuesday 11 AM → Tuesday afternoon onward is incomplete
   const full = makeCond('dewey', { wave: 0.6 });                // complete all week, modest scores
   const spot = spotById('bethany');
   const ev = []; let t = Date.parse('2026-11-21T03:00Z'), hi = true;
   while (t < Date.parse('2026-12-02T00:00Z')) { ev.push({ t: new Date(t), v: hi ? 4.2 : 0.2, type: hi ? 'H' : 'L' }); t += 6.2 * H; hi = !hi; }
-  const grid = { at: tt => ({ windMph: 4, gustMph: 6, windFromDeg: 280, pop: 0, thunder: 0, tempF: 50, waveFt: tt < Date.parse('2026-11-24T16:00Z') ? 0.5 : null }) };
-  const part = buildConditions(spot, { tideEvents: ev, grid, status: { tide: true, wind: false, buoy: false, forecast: true } }, NOW);
+  const grid = { at: () => ({ windMph: 4, gustMph: 6, windFromDeg: 280, pop: 0, thunder: 0, tempF: 50, waveFt: 3 }) }; // NWS waves: NOT used at Bethany
+  const nwps = fakeNwps(tt => (tt < Date.parse('2026-11-24T16:00Z') ? 0.5 : null));
+  const part = buildConditions(spot, { tideEvents: ev, grid, nwps, status: { tide: true, wind: false, buoy: false, forecast: true } }, NOW);
   const days = forecastDays(part.timeline, part.now);
   const tue = days.find(d => d.label === 'Tue');
   const tl = part.timeline.filter(s => s.t >= tue.start && s.t < tue.end && s.skimmable);
-  const incBest = Math.max(...tl.filter(s => s.skimmable && s.score != null && !isComplete(s)).map(s => s.score));
-  const cmpBest = Math.max(...tl.filter(s => s.skimmable && isComplete(s)).map(s => s.score));
-  assert.ok(incBest > cmpBest, `fixture: the incomplete afternoon (${incBest}) out-scores the complete morning (${cmpBest})`);
+  const inc = tl.filter(s => s.waves == null);
+  assert.ok(inc.length > 4, 'fixture: Tuesday afternoon has no model waves');
+  assert.ok(inc.every(s => s.score == null && s.reason === 'incomplete' && s.missing.includes('waves')), 'no score without waves — tide & wind are not re-weighted');
+  const cmpBest = Math.max(...tl.filter(s => isComplete(s)).map(s => s.score));
   const w = spotDayBest(part, tue);
-  assert.equal(w.complete, true); assert.equal(w.bestScore, cmpBest, 'BEST band = best COMPLETE time, not the higher incomplete one');
+  assert.equal(w.complete, true); assert.equal(w.bestScore, cmpBest, 'BEST band = best COMPLETE time');
   assert.ok(isComplete(w.peak));
-  // a later day with no waves at all: the spot still shows its incomplete best (≈), but cannot win
+  // a later day with no waves at all: no score, no day best, cannot win
   const fri = days.find(d => d.label === 'Fri');
-  const wf = spotDayBest(part, fri);
-  assert.equal(wf.complete, false); assert.equal(wf.peak.confidence, 'low');
+  assert.equal(spotDayBest(part, fri), null);
   const o = weekOutlook({ dewey: full, bethany: part }, spots);
   const ofri = o.days.find(d => d.day.label === 'Fri');
-  assert.equal(ofri.best.spot.id, 'dewey', `complete Dewey ${ofri.best.w.bestScore} beats incomplete Bethany ${wf.bestScore}`);
-  assert.ok(wf.bestScore > ofri.best.w.bestScore, 'even though the incomplete score is higher');
+  assert.equal(ofri.best.spot.id, 'dewey', 'only the complete forecast can win');
   for (const d of o.days) if (d.best) assert.ok(isComplete(d.best.sample), `${d.day.label}: winner is complete`);
   assert.ok(isComplete(o.top.sample), 'Best This Week is complete');
 });
@@ -217,11 +219,14 @@ test('a day where no rated spot has a complete forecast shows "–" (no winner)'
   const spot = spotById('dewey');
   const ev = []; let t = Date.parse('2026-11-21T03:00Z'), hi = true;
   while (t < Date.parse('2026-12-02T00:00Z')) { ev.push({ t: new Date(t), v: hi ? 4.2 : 0.2, type: hi ? 'H' : 'L' }); t += 6.2 * H; hi = !hi; }
-  const noWaves = buildConditions(spot, { tideEvents: ev, grid: { at: () => ({ windMph: 4, gustMph: 6, windFromDeg: 280, pop: 0, thunder: 0, tempF: 50, waveFt: null }) }, status: { tide: true, wind: false, buoy: false, forecast: true } }, NOW);
+  // the nearshore model failed to load (no `nwps`): the NWS grid's waves are NOT swapped in
+  const noWaves = buildConditions(spot, { tideEvents: ev, grid: { at: () => ({ windMph: 4, gustMph: 6, windFromDeg: 280, pop: 0, thunder: 0, tempF: 50, waveFt: 2 }) }, nwps: null, status: { tide: true, wind: false, buoy: false, forecast: true } }, NOW);
   const o = weekOutlook({ dewey: noWaves }, spots);
   assert.ok(o.days.every(d => d.best === null), 'every day: no complete forecast → no winner');
   assert.equal(o.top, null);
-  assert.ok(o.days.slice(1).every(d => spotDayBest(noWaves, d.day)?.complete === false), 'the spot itself still has an (incomplete) day best to show');
+  assert.ok(noWaves.timeline.every(s => s.waves == null && s.score == null), 'no waves, no score — not tide & wind alone');
+  assert.ok(o.days.slice(1).every(d => spotDayBest(noWaves, d.day) === null), 'no day best is offered either');
+  assert.equal(noWaves.window.state, 'unknown', 'no Best Window from incomplete data');
 });
 
 // ---------- weekly: no empty Today; weather symbols ----------

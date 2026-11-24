@@ -22,7 +22,15 @@
 //  wind.shelteredFrom [fromDeg, toDeg] directions the spot is protected from (e.g. by a jetty); null = none
 //  waves.ft           { min, idealMin, idealMax, max } breaking wave height preference (ft)
 //  waves.periodS      { idealMin, idealMax } wave period preference (s)
-//  weights            relative importance of each factor; renormalised over the factors available
+//  weights            relative importance of each factor (tide, wind, waves). A rated spot is only
+//                     scored when all three inputs exist — missing waves never re-weight the others.
+//
+// sources.nwps: the fixed ocean point where the NOAA NWPS nearshore wave forecast (Mount Holly,
+// ~1 km CG2 grid) is read for this spot: the centre of a chosen ocean cell roughly 0.6–1.2 km off
+// the beach, east of the spot. Deliberately NOT the nearest wet model cell: that lands in Rehoboth
+// Bay for Dewey and inside Indian River Inlet for Southside/Northside. Southside's cell is south of
+// the inlet mouth and Northside's north of it, so the two are never the same cell. These are
+// model values a short way out, not the breaking shorebreak.
 
 export const DEFAULT_WEIGHTS = { tide: 0.35, wind: 0.35, waves: 0.30 };
 
@@ -31,7 +39,8 @@ export const spots = [
     id: 'dewey', name: 'Dewey', fullName: 'Dewey Beach',
     lat: 38.6915, lon: -75.0745,
     cams: ['dewey-beach'],
-    sources: { tide: '8557863', tideName: 'Rehoboth Beach', obs: '8557380', obsName: 'Lewes', buoy: '44084', buoyName: 'Bethany Beach buoy' },
+    sources: { tide: '8557863', tideName: 'Rehoboth Beach', obs: '8557380', obsName: 'Lewes', buoy: '44084', buoyName: 'Bethany Beach buoy',
+      nwps: { lat: 38.6890, lon: -75.0654, offshoreKm: 0.8 } },
     profile: {
       shoreFacingDeg: 100,
       tide: { idealPhase: [0.3, 0.7], preferRising: true, maxRateFtHr: null },
@@ -44,7 +53,8 @@ export const spots = [
     id: 'bethany', name: 'Bethany', fullName: 'Bethany Beach',
     lat: 38.5395, lon: -75.0545,
     cams: ['bethany-ocean', 'bethany-north', 'bethany-south'],
-    sources: { tide: '8557863', tideName: 'Rehoboth Beach', obs: '8570283', obsName: 'Ocean City Inlet', buoy: '44084', buoyName: 'Bethany Beach buoy' },
+    sources: { tide: '8557863', tideName: 'Rehoboth Beach', obs: '8570283', obsName: 'Ocean City Inlet', buoy: '44084', buoyName: 'Bethany Beach buoy',
+      nwps: { lat: 38.5360, lon: -75.0423, offshoreKm: 1.1 } },
     profile: {
       shoreFacingDeg: 100,
       tide: { idealPhase: [0.2, 0.6], preferRising: true, maxRateFtHr: null },
@@ -57,7 +67,8 @@ export const spots = [
     id: 'southside', name: 'Southside', fullName: 'Southside / Indian River Inlet',
     lat: 38.6050, lon: -75.0605,
     cams: ['inlet-overview', 'inlet-north'],
-    sources: { tide: '8558690', tideName: 'Indian River Inlet', obs: '8557380', obsName: 'Lewes', buoy: '44084', buoyName: 'Bethany Beach buoy' },
+    sources: { tide: '8558690', tideName: 'Indian River Inlet', obs: '8557380', obsName: 'Lewes', buoy: '44084', buoyName: 'Bethany Beach buoy',
+      nwps: { lat: 38.5990, lon: -75.0538, offshoreKm: 0.9 } },
     profile: {
       shoreFacingDeg: 95,
       tide: { idealPhase: [0.35, 0.8], preferRising: true, maxRateFtHr: 0.9 },
@@ -70,7 +81,8 @@ export const spots = [
     id: 'northside', name: 'Northside', fullName: 'Naval Jetty / Northside',
     lat: 38.6125, lon: -75.0650,
     cams: ['inlet-north', 'inlet-overview'],
-    sources: { tide: '8558690', tideName: 'Indian River Inlet', obs: '8557380', obsName: 'Lewes', buoy: '44084', buoyName: 'Bethany Beach buoy' },
+    sources: { tide: '8558690', tideName: 'Indian River Inlet', obs: '8557380', obsName: 'Lewes', buoy: '44084', buoyName: 'Bethany Beach buoy',
+      nwps: { lat: 38.6170, lon: -75.0538, offshoreKm: 1 } },
     profile: {
       shoreFacingDeg: 85,
       tide: { idealPhase: [0.35, 0.75], preferRising: true, maxRateFtHr: 0.9 },
@@ -87,7 +99,9 @@ export const spots = [
     lat: 38.6500, lon: -75.0700,
     cams: [],
     nearbyCams: ['dewey-beach', 'inlet-north'],
-    sources: { tide: '8557863', tideName: 'Rehoboth Beach', obs: '8557380', obsName: 'Lewes', buoy: '44084', buoyName: 'Bethany Beach buoy' },
+    // NWPS waves are shown for Conquest's conditions; it stays NOT RATED (no profile).
+    sources: { tide: '8557863', tideName: 'Rehoboth Beach', obs: '8557380', obsName: 'Lewes', buoy: '44084', buoyName: 'Bethany Beach buoy',
+      nwps: { lat: 38.6440, lon: -75.0538, offshoreKm: 1.5 } },
     profile: {
       shoreFacingDeg: null,
       tide: null,

@@ -102,7 +102,7 @@ test('2: a legitimate zero / near-zero wave forecast over a normal block is kept
   assert.equal(dropWavePlaceholders([{ s, e: s + 30 * H, v: 1.2 }]).length, 1, 'long non-zero values are real data');
 });
 
-test('2: timeline with the production waves — placeholder hours read Not available, scored without waves, low confidence', () => {
+test('2: timeline with the production NWS waves (display-only spots) — placeholder hours read Not available, never 0 ft; a rated spot is not scored from them', () => {
   const now = new Date('2026-11-22T22:24:24Z');
   const ser = dropWavePlaceholders(series(fixture.grids['PHI/61,23'], m => m * M_TO_FT));
   const pick = t => { const x = ser.find(r => t >= r.s && t < r.e); return x ? x.v : null; };
@@ -110,15 +110,19 @@ test('2: timeline with the production waves — placeholder hours read Not avail
   const wind = t => ({ windMph: 6, gustMph: 9, windFromDeg: 280, pop: 0, thunder: 0, tempF: 55, waveFt: pick(t.getTime()) });
   const grid = { at: wind };
   const ev = []; for (let k = -2; k < 20; k++) ev.push({ t: new Date(now.getTime() + k * 6.2 * H), type: k % 2 ? 'L' : 'H', v: k % 2 ? 0 : 4.5 });
-  const spot = spotById('dewey');
-  const c = buildConditions(spot, { grid, tideEvents: ev, status: {} }, now);
+  // Ocean City still shows the NWS wave grid (outside the NWPS model's area; NOT RATED)
+  const c = buildConditions(spotById('oc-downtown'), { grid, tideEvents: ev, status: {} }, now);
   const at = iso => c.timeline.find(x => x.t.getTime() === Date.parse(iso));
   const mon = at('2026-11-23T15:00:00Z'), wed = at('2026-11-25T17:00:00Z');
   assert.ok(Math.abs(mon.waves.ft - 1) < 0.01, 'Monday keeps the real 1 ft forecast');
+  assert.equal(mon.waves.source, 'fcst');
   assert.equal(wed.waves, null, 'Wednesday: no wave data, not 0 ft');
-  assert.notEqual(wed.score, null, 'still scored on tide + wind');
-  assert.equal(wed.coverage < 1, true); assert.equal(wed.confidence, 'low');
-  assert.ok(!wed.reasons.some(r => /flat|small|wave/i.test(r.text)), 'no wave reasons invented from missing data');
+  // Dewey (rated) does not take its waves from the NWS grid at all: with no NWPS model loaded
+  // the hours have no waves and therefore no score — tide + wind alone are never a Pirate Score
+  const d = buildConditions(spotById('dewey'), { grid, tideEvents: ev, status: {} }, now);
+  const dm = d.timeline.find(x => x.t.getTime() === Date.parse('2026-11-23T15:00:00Z'));
+  assert.equal(dm.waves, null); assert.equal(dm.score, null); assert.deepEqual(dm.missing, ['waves']);
+  assert.ok(!dm.reasons.some(r => /flat|small|wave/i.test(r.text)), 'no wave reasons invented from missing data');
 });
 
 // ---------------- 3. recommendation wording respects the thresholds ----------------

@@ -2,8 +2,10 @@
 // position, light/offshore wind), not surfing. Pure functions, no I/O.
 //
 // Every factor returns quality 0..1 or null (data missing OR the spot's profile
-// leaves it unconfigured). Missing factors are skipped and the remaining weights
-// renormalised — nothing is guessed. A score needs at least 2 of 3 core factors.
+// leaves it unconfigured). A spot is scored only when EVERY factor its profile configures has
+// data: a missing input (e.g. no wave forecast) gives no score — { score: null, reason:
+// 'incomplete', missing: [...] } — instead of re-weighting the others upward, which used to
+// make incomplete hours look better than complete ones. Nothing is guessed or zero-filled.
 
 export const LABELS = [
   { min: 9, label: 'FIRING', tone: 'firing' },
@@ -106,7 +108,8 @@ export function scoreSample(profile, s) {
     windFactor(profile.wind, profile.shoreFacingDeg, s.wind),
     wavesFactor(profile.waves, profile.shoreFacingDeg, s.waves),
   ].filter(Boolean);
-  if (factors.length < 2) return { score: null, reason: 'insufficient-data' };
+  const missing = ['tide', 'wind', 'waves'].filter(k => profile[k] && !factors.some(f => f.key === k));
+  if (missing.length) return { score: null, reason: 'incomplete', missing };
   const wsum = factors.reduce((a, f) => a + w[f.key], 0);
   let score = 10 * factors.reduce((a, f) => a + f.q * w[f.key], 0) / wsum;
   // One bad factor (e.g. strong onshore wind) should limit the session, not be averaged away.
@@ -119,9 +122,14 @@ export function scoreSample(profile, s) {
   if (s.daylight === false) { score = Math.min(score, 2); extra.push(['-', 'After dark', 3]); }
   score = Math.round(clamp(score, 0, 10) * 10) / 10;
 
-  // Rank reasons by how much each factor helped or hurt, keep it short.
+  // Rank reasons by how much each factor helped or hurt, keep it short. A "+" detail of a factor
+  // that is itself weak (q < 0.5 — e.g. "Incoming tide" while the tide is far too high) is not
+  // shown as a plus: it isn't what the score is made of.
   const ranked = [];
-  for (const f of factors) for (const [sign, text] of f.why) ranked.push({ sign, text, weight: (sign === '+' ? f.q : 1 - f.q) * w[f.key] + (sign === '+' ? 0 : 0.01) });
+  for (const f of factors) for (const [sign, text] of f.why) {
+    if (sign === '+' && f.q < 0.5) continue;
+    ranked.push({ sign, text, weight: (sign === '+' ? f.q : 1 - f.q) * w[f.key] + (sign === '+' ? 0 : 0.01) });
+  }
   for (const [sign, text, weight] of extra) ranked.push({ sign, text, weight });
   const pos = ranked.filter(r => r.sign === '+').sort((a, b) => b.weight - a.weight).slice(0, 3);
   const neg = ranked.filter(r => r.sign === '-').sort((a, b) => b.weight - a.weight).slice(0, 3);

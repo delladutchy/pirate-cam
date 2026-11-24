@@ -16,4 +16,4 @@ export const compass = deg => (Number.isFinite(deg) ? POINTS[Math.round(((deg % 
 export const ft = v => `${v.toFixed(1)} ft`;
 export const mins = m => (m < 60 ? `${m} min` : m % 60 === 0 || m >= 180 ? `${Math.round(m / 60)} hr` : `${Math.floor(m / 60)} hr ${m % 60} min`);
 export const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-export const SOURCE_TAG = { obs: 'Observed', fcst: 'Forecast', est: 'Estimate' };
+export const SOURCE_TAG = { obs: 'Observed', fcst: 'Forecast', model: 'Model forecast', est: 'Estimate' };

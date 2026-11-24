@@ -44,8 +44,8 @@ test('only SHORT zero runs SURROUNDED by real waves are dropped; nothing is inte
   assert.deepEqual(dropWavePlaceholders(legit), legit);
 });
 
-test('in the timeline those hours have no wave value: scored on tide & wind, low confidence, never 0 ft', () => {
-  const spot = spotById('southside');
+test('in the timeline those hours have no wave value, never 0 ft (NWS grid, display-only spot)', () => {
+  const spot = spotById('oc-midtown'); // the NWS wave grid now only feeds the unrated Ocean City spots
   const kept = dropWavePlaceholders(raw);
   const pick = (ser, t) => { const x = ser.find(r => t >= r.s && t < r.e); return x ? x.v : null; };
   const grid = { at: t => ({ windMph: 6, gustMph: 9, windFromDeg: 280, pop: 0, thunder: 0, tempF: 50, waveFt: pick(kept, t.getTime()) }) };
@@ -54,6 +54,6 @@ test('in the timeline those hours have no wave value: scored on tide & wind, low
   const c = buildConditions(spot, { tideEvents: ev, grid, status: { tide: true, wind: false, buoy: false, forecast: true } }, new Date('2026-11-23T04:40Z'));
   const s = c.timeline.find(x => x.t.toISOString() === '2026-11-24T02:00:00.000Z');
   assert.equal(s.waves, null, 'no 0 ft wave value');
-  assert.ok(s.score != null && s.coverage < 1 && s.confidence === 'low');
+  assert.equal(s.score, null, 'unrated spot, and no waves anyway');
   assert.ok(c.timeline.every(x => !x.waves || x.waves.ft > 0 || x.t < new Date('2026-11-22T18:00Z')), 'no remaining 0 ft after the leading hour');
 });

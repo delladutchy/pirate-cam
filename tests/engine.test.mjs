@@ -40,9 +40,13 @@ test('night caps score, thunder caps score', () => {
   assert.ok(scoreSample(dewey, { ...ideal, daylight: false }).score <= 2);
   assert.ok(scoreSample(dewey, { ...ideal, thunder: 40 }).score <= 3);
 });
-test('missing data is skipped, never guessed', () => {
-  const r = scoreSample(dewey, { ...ideal, waves: null }); assert.ok(r.score != null); assert.ok(r.confidence < 1);
-  assert.equal(scoreSample(dewey, { ...ideal, waves: null, wind: null }).score, null);
+test('missing data is never guessed and never re-weighted: an incomplete sample has no score', () => {
+  const r = scoreSample(dewey, { ...ideal, waves: null });
+  assert.equal(r.score, null); assert.equal(r.reason, 'incomplete'); assert.deepEqual(r.missing, ['waves']);
+  assert.deepEqual(scoreSample(dewey, { ...ideal, waves: null, wind: null }).missing, ['wind', 'waves']);
+  assert.deepEqual(scoreSample(dewey, { ...ideal, tide: null }).missing, ['tide']);
+  const full = scoreSample(dewey, ideal);
+  assert.ok(full.score != null && full.confidence === 1, 'complete inputs still score as before');
 });
 test('Conquest is not rated until its profile is configured', () => {
   assert.equal(scoreSample(spotById('conquest').profile, ideal).reason, 'not-configured');

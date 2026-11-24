@@ -30,6 +30,15 @@ export function buildConditions(spot, data, now = new Date()) {
   const grid = data.grid;
   const g = t => (grid ? grid.at(t) : {});
   const tideAt = t => (tide && tide.covers(t) ? tide.at(t) : null);
+  // Waves for the score: the NWPS nearshore model wherever the spot has an NWPS point — the same
+  // source now and in the future, so there is no jump between "now" and the next step. If the
+  // model is unavailable those hours have no waves (no other source is swapped in). Spots without
+  // an NWPS point (Ocean City, unrated) keep the NWS wave grid, labelled as such.
+  const usesNwps = !!spot.sources?.nwps;
+  const nw = usesNwps ? data.nwps : null;
+  const modelWaves = t => (nw ? nw.at(spot.id, t) : null);
+  const nwsWaves = f => (f.waveFt != null ? { ft: f.waveFt, periodS: null, fromDeg: null, source: 'fcst' } : null);
+  const waveAt = (t, f) => (usesNwps ? modelWaves(t) : nwsWaves(f));
 
   // ---- current conditions, observed first, forecast as fallback ----
   const g0 = g(now);
@@ -38,9 +47,13 @@ export function buildConditions(spot, data, now = new Date()) {
     : g0.windMph != null ? { mph: g0.windMph, fromDeg: num(g0.windFromDeg), gustMph: num(g0.gustMph), source: 'fcst' } : null;
 
   const b = data.buoy;
-  const waves = b && b.waveHeightFt != null && fresh(b.observedAt, 3 * HOUR, now)
-    ? { ft: b.waveHeightFt, periodS: num(b.dominantPeriodS), fromDeg: num(b.waveFromDeg), source: 'obs', t: b.observedAt }
-    : g0.waveFt != null ? { ft: g0.waveFt, periodS: null, fromDeg: null, source: 'fcst' } : null;
+  // Observed buoy waves are shown as observations (details, shorebreak estimate); for NWPS spots
+  // they are not mixed into the score, which uses the model consistently (see waveAt).
+  const buoyWaves = b && b.waveHeightFt != null && fresh(b.observedAt, 3 * HOUR, now)
+    ? { ft: b.waveHeightFt, periodS: num(b.dominantPeriodS), fromDeg: num(b.waveFromDeg), source: 'obs', t: b.observedAt } : null;
+  const waveModelNow = modelWaves(now);
+  const waves = usesNwps ? buoyWaves : buoyWaves || nwsWaves(g0); // current.waves: the observation (model is current.waveModel)
+  const scoreWavesNow = usesNwps ? waveModelNow : waves;
 
   const water = b && b.waterTempF != null && fresh(b.waterObservedAt, 3 * HOUR, now)
     ? { f: b.waterTempF, source: 'obs', where: spot.sources.buoyName }
@@ -51,7 +64,7 @@ export function buildConditions(spot, data, now = new Date()) {
 
   const tideNow = tideAt(now);
   const current = {
-    wind, waves, water, air,
+    wind, waves, water, air, waveModel: waveModelNow, waveModelInfo: nw ? { run: nw.run, runTime: nw.runTime, fallback: nw.fallback, stale: nw.stale, end: nw.end } : null, usesNwps,
     tide: tideNow ? { ...tideNow, source: 'fcst', nextHigh: tide.nextHigh(now), nextLow: tide.nextLow(now) } : null,
     energy: waves && waves.source === 'obs' ? shorebreakEnergy(waves.ft, waves.periodS) : null,
     pop: num(g0.pop), daylight: isDaylight(now, daylight),
@@ -59,7 +72,7 @@ export function buildConditions(spot, data, now = new Date()) {
   const wxFields = f => ({ sky: num(f.sky), wx: typeof f.wx === 'string' && f.wx ? f.wx : null });
 
   const nowSample = {
-    t: now, tide: tideNow, wind, waves, pop: current.pop, thunder: num(g0.thunder), daylight: current.daylight,
+    t: now, tide: tideNow, wind, waves: scoreWavesNow, pop: current.pop, thunder: num(g0.thunder), daylight: current.daylight,
     skimmable: isSkimmable(now, skim), airF: air ? air.f : null, ...wxFields(g0),
   };
   const nowScore = scoreSample(spot.profile, nowSample);
@@ -74,7 +87,7 @@ export function buildConditions(spot, data, now = new Date()) {
     const s = {
       t, tide: tideAt(t),
       wind: w && Number.isFinite(w.mph) ? { mph: w.mph, fromDeg: num(w.fromDeg), gustMph: num(w.gustMph), source: 'fcst' } : null,
-      waves: f.waveFt != null ? { ft: f.waveFt, periodS: null, fromDeg: null, source: 'fcst' } : null,
+      waves: waveAt(t, f),
       pop: num(f.pop), thunder: num(f.thunder), daylight: isDaylight(t, daylight),
       skimmable: isSkimmable(t, skim), airF: num(f.tempF), ...wxFields(f),
     };
@@ -95,4 +108,4 @@ export function buildConditions(spot, data, now = new Date()) {
   };
 }
 
-function pickScore(r) { return { score: r.score, label: r.label, tone: r.tone, reasons: r.reasons || [], reason: r.reason, coverage: r.confidence }; }
+function pickScore(r) { return { score: r.score, label: r.label, tone: r.tone, reasons: r.reasons || [], reason: r.reason, missing: r.missing || null, coverage: r.confidence, factors: r.factors || null }; }

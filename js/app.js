@@ -193,7 +193,7 @@ function dockView(r, s, t, relation, rec) {
     tide: s.tide ? `${s.tide.height.toFixed(1)}′ ${s.tide.rising ? '↑' : '↓'}` : '–',
     tidesub: s.tide ? (s.tide.rising ? 'incoming' : 'outgoing') : 'tide',
     waves: s.waves && Number.isFinite(s.waves.ft) ? `${s.waves.ft.toFixed(1)}′` : '–',
-    wavesub: s.waves ? (s.waves.periodS ? `${Math.round(s.waves.periodS)}s · buoy` : 'offshore fcst') : 'waves',
+    wavesub: s.waves ? (s.waves.periodS ? `${Math.round(s.waves.periodS)}s · ${s.waves.source === 'obs' ? 'buoy' : 'model'}` : 'offshore fcst') : 'waves',
     temp: Number.isFinite(s.airF) ? `${Math.round(s.airF)}°` : '–',
     tempsub: isNow && r.current.water ? `water ${Math.round(r.current.water.f)}°` : Number.isFinite(s.pop) && s.pop >= 10 ? `rain ${Math.round(s.pop)}%` : 'air',
     rec: rec?.head, recSub: rec?.sub, recKind: rec?.kind,
@@ -272,8 +272,10 @@ function renderConditions(spotSwitch = false) {
     countUp([{ el: card, format: v => v.toFixed(1) }, { el: dockNum, format: v => pre + v.toFixed(1) }], prevScore, to);
   }
   renderDetails($('#details'), r);
-  const missing = Object.entries(r.status).filter(([, ok]) => !ok).map(([k]) => ({ tide: 'tides', wind: 'observed wind', buoy: 'wave buoy', forecast: 'forecast' }[k]));
-  $('#sourceNote').textContent = missing.length ? `Temporarily unavailable: ${missing.join(', ')}.` : '';
+  const missing = Object.entries(r.status).filter(([, ok]) => ok === false).map(([k]) => ({ tide: 'tides', wind: 'observed wind', buoy: 'wave buoy', forecast: 'forecast', nwps: 'nearshore wave forecast (no Pirate Score without it)' }[k]));
+  const wm = r.current.waveModelInfo;
+  const late = wm && (wm.fallback || wm.stale) ? ` Nearshore waves: ${wm.fallback ? 'previous NWPS run' : 'NWPS run is late'}.` : '';
+  $('#sourceNote').textContent = (missing.length ? `Temporarily unavailable: ${missing.join(', ')}.` : '') + late;
   if (spotSwitch) fadeIn($('.rail'), $('#piratecastPanel'), $('.tidepanel'));
   timeDock.refresh(); // layout changed (panels shown): re-check whether the dock belongs on screen
 }

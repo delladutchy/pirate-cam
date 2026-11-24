@@ -68,7 +68,7 @@ export function createDayGraph(el, { onPick }) {
       const a = X(lastScored.t.getTime() + 15 * 60e3);
       svg += `<rect x="${a}" y="${top}" width="${W - padR - a}" height="${base - top}" class="dg-nodata"/>` + (W - padR - a > 60 ? `<text x="${(a + W - padR) / 2}" y="${(top + base) / 2}" class="dg-note" text-anchor="middle">Not enough data</text>` : '');
     }
-    if (!pts.some(s => s.score != null)) svg += `<text x="${W / 2}" y="${(top + base) / 2}" class="dg-note" text-anchor="middle">${cond.score.reason === 'not-configured' ? 'Not rated yet — skim profile not set up' : 'Not enough data for a score this day'}</text>`;
+    if (!pts.some(s => s.score != null)) svg += `<text x="${W / 2}" y="${(top + base) / 2}" class="dg-note" text-anchor="middle">${cond.score.reason === 'not-configured' ? 'Not rated yet — skim profile not set up' : pts.some(s => s.missing?.includes('waves')) ? 'No nearshore wave forecast — no score this day' : 'Not enough data for a score this day'}</text>`;
     // DAY'S BEST window of this day
     const w = cond.dayWindows?.[day.index];
     if (w && w.start) {
@@ -134,7 +134,12 @@ export function createDayGraph(el, { onPick }) {
     const m = el.querySelector('.dg-marker');
     const t = (selT || geo.cond.now).getTime();
     const inRange = t >= geo.t0 && t <= geo.t1;
-    for (const c of el.querySelectorAll('.wxc')) c.classList.toggle('on', inRange && Math.abs(+c.dataset.t - t) < 30 * 60e3);
+    // highlight the weather cell nearest the selected time. Cells are 1 h or 2 h apart and span the
+    // graph, so a selection inside the graph always has one; an exact tie (3:30 between 3 PM and
+    // 4 PM) goes to the earlier hour, whose forecast covers it
+    let on = null, best = Infinity;
+    for (const c of el.querySelectorAll('.wxc')) { const d = Math.abs(+c.dataset.t - t); if (d < best) { best = d; on = c; } }
+    for (const c of el.querySelectorAll('.wxc')) c.classList.toggle('on', inRange && c === on);
     if (!inRange) { m.style.display = 'none'; return; }
     m.style.display = '';
     let near = null, d = Infinity;

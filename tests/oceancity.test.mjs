@@ -11,7 +11,11 @@ const DELAWARE = ['dewey', 'bethany', 'southside', 'northside', 'conquest'];
 
 test('the five Delaware spots and six Delaware cameras are byte-for-byte what 16e4fe3 shipped', () => {
   assert.deepEqual(spots.slice(0, 5).map(s => s.id), DELAWARE);
-  assert.equal(hash(spots.slice(0, 5)), 'e76a27c85b9c0c32');
+  // the only Delaware change since then is the added NWPS sampling point (sources.nwps)
+  const without = spots.slice(0, 5).map(s => { const { nwps, ...src } = s.sources; return { ...s, sources: src }; });
+  assert.equal(hash(without), 'e76a27c85b9c0c32');
+  for (const s of spots.slice(0, 5)) assert.ok(s.sources.nwps && s.sources.nwps.lon > s.lon, `${s.id}: NWPS point lies offshore (east)`);
+  for (const s of spots.slice(5)) assert.equal(s.sources.nwps, undefined, `${s.id}: outside the PHI NWPS grid`);
   assert.equal(hash(cams.slice(0, 6)), '69a3150b9e7afffb');
 });
 

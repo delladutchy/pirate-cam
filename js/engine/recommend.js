@@ -34,7 +34,11 @@ export function recommendFor(cond, s, t, w) {
   const isNow = !t;
   if (cond.score.reason === 'not-configured') return { kind: 'none', head: 'Not rated yet', sub: 'This spot has no skim profile yet.' };
   if (s.skimmable === false) return outsideSkim(cond, s, t || cond.now);
-  if (s.score == null) return { kind: 'nodata', head: 'Not enough data', sub: 'The forecast is missing inputs needed for a score at this time.' };
+  if (s.score == null) {
+    return s.missing?.includes('waves')
+      ? { kind: 'nodata', head: 'No wave forecast', sub: 'No nearshore wave forecast for this time, so no Pirate Score.' }
+      : { kind: 'nodata', head: 'Not enough data', sub: 'The forecast is missing inputs needed for a score at this time.' };
+  }
   const at = t || cond.now;
   if (isNow) {
     const g = cond.window;

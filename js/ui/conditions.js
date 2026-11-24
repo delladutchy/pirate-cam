@@ -11,6 +11,10 @@ export const timeLabel = (t, cond) => (!t ? 'Now' : `${etDate(t) === etDate(cond
 // Small compass: N tick + an arrow pointing where the wind BLOWS TO (meteorological from + 180).
 const COMPASS = '<svg class="wcompass" viewBox="0 0 36 36" aria-hidden="true"><circle cx="18" cy="18" r="16" class="wc-ring"/><text x="18" y="7.5" class="wc-n" text-anchor="middle">N</text><g class="wc-arrow"><path d="M18 7l5 9h-3.3v12h-3.4V16H13z"/></g></svg>';
 const REL = { offshore: 'Offshore', 'cross-shore': 'Cross-shore', onshore: 'Onshore', calm: 'Calm' };
+const WAVE_SRC = { obs: 'offshore buoy', model: 'nearshore model', fcst: 'offshore fcst' };
+const utcRun = d => `${String(d.getUTCHours()).padStart(2, '0')}Z ${d.toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' })}`;
+/** "NOAA NWPS run 06Z Nov 24 (previous run)" — the model and run behind a wave value. */
+export const modelLabel = w => `NOAA NWPS run ${w.runTime ? utcRun(new Date(w.runTime)) : w.run}${w.fallback ? ' (previous run)' : ''}${w.stale ? ' (delayed)' : ''}`;
 
 /** Plain-language condition facts for a sample. Missing values are left out, never guessed. */
 export function facts(s) {
@@ -68,7 +72,7 @@ export function updateScore(el, cond, s, { onBackToNow, label, isNow = s === con
     el.className = `score tone-none${s.outside ? ' outside' : ''}`;
     el.querySelector('.num').textContent = '–'; el.querySelector('.num').dataset.v = '';
     // outside skim hours is not a bad score — it's no skim forecast at all
-    el.querySelector('.lbltxt').textContent = s.outside ? (s.daylight ? 'Outside skim hours' : 'After dark') : 'Not enough data';
+    el.querySelector('.lbltxt').textContent = s.outside ? (s.daylight ? 'Outside skim hours' : 'After dark') : s.missing?.includes('waves') ? 'No wave forecast' : 'Not enough data';
     el.querySelector('.why ul').innerHTML = '';
     el.querySelector('.why').style.visibility = 'hidden'; // nothing to explain (the line above says why) — space kept so nothing jumps
   }
@@ -80,7 +84,9 @@ export function updateScore(el, cond, s, { onBackToNow, label, isNow = s === con
   set('waves', f.waves || 'Not available');
   // offshore wave data is NOT the beach shorebreak: say where it comes from; the shorebreak line is an estimate
   const energy = isNow && cond.current.energy ? `${cond.current.energy.label.toLowerCase()} shorebreak (est.)` : '';
-  set('wavesub', [s.waves ? (s.waves.source === 'obs' ? 'offshore buoy' : 'offshore fcst') : '', s.waves && Number.isFinite(s.waves.fromDeg) ? compass(s.waves.fromDeg) : '', energy].filter(Boolean).join(' · '));
+  set('wavesub', [s.waves ? WAVE_SRC[s.waves.source] || 'offshore fcst' : '', s.waves && Number.isFinite(s.waves.fromDeg) ? compass(s.waves.fromDeg) : '', energy].filter(Boolean).join(' · '));
+  const fine = el.querySelector('.why .fine');
+  if (fine) fine.textContent = s.waves?.source === 'model' ? `Pirate View estimate. Waves: ${modelLabel(s.waves)}, ~1 km offshore (a model forecast, not a beach measurement).` : 'Pirate View estimate from NOAA data.';
   set('tide', f.tide || 'Not available');
   set('tidesub', s.tide ? (s.tide.rising ? 'Rising · incoming' : 'Falling · outgoing') : '');
   set('air', Number.isFinite(s.airF) ? `${Math.round(s.airF)}°F` : 'Not available');
@@ -115,9 +121,14 @@ export function renderDetails(el, cond) {
   let h = '';
   if (c.wind) h += row('Wind', `${compass(c.wind.fromDeg)} ${Math.round(c.wind.mph)} mph${Number.isFinite(c.wind.gustMph) ? `, gusts ${Math.round(c.wind.gustMph)}` : ''}`, c.wind.source === 'obs' ? `${src.obsName}, ${time(c.wind.t)}` : 'NWS', c.wind.source);
   else h += row('Wind', 'Not available');
-  if (c.waves) h += row('Waves', `${c.waves.ft.toFixed(1)} ft${c.waves.periodS ? ` @ ${Math.round(c.waves.periodS)} s` : ''}${Number.isFinite(c.waves.fromDeg) ? ` from ${compass(c.waves.fromDeg)} (${Math.round(c.waves.fromDeg)}°)` : ''}`, c.waves.source === 'obs' ? `${src.buoyName}, ${time(c.waves.t)}` : 'NWS', c.waves.source);
-  else h += row('Waves', 'Not available');
+  const wk = c.usesNwps ? 'Waves · buoy' : 'Waves';
+  if (c.waves) h += row(wk, `${c.waves.ft.toFixed(1)} ft${c.waves.periodS ? ` @ ${Math.round(c.waves.periodS)} s` : ''}${Number.isFinite(c.waves.fromDeg) ? ` from ${compass(c.waves.fromDeg)} (${Math.round(c.waves.fromDeg)}°)` : ''}`, c.waves.source === 'obs' ? `${src.buoyName}, ${time(c.waves.t)}` : 'NWS', c.waves.source);
+  else h += row(wk, 'Not available', c.usesNwps ? `${src.buoyName}: no recent report` : '');
   if (c.energy) h += row('Shorebreak energy', c.energy.label, 'From wave height & period', 'est');
+  if (c.usesNwps) {
+    if (c.waveModel) h += row('Waves · nearshore model', `${c.waveModel.ft.toFixed(1)} ft @ ${Math.round(c.waveModel.periodS)} s from ${compass(c.waveModel.fromDeg)} (${Math.round(c.waveModel.fromDeg)}°)`, `${modelLabel(c.waveModel)}, ~1 km offshore · used by Pirate Score`, 'model');
+    else h += row('Waves · nearshore model', 'Not available', 'NOAA NWPS · no Pirate Score without it');
+  }
   if (c.tide) h += row('Tide', `${c.tide.height.toFixed(2)} ft, ${c.tide.rising ? 'rising' : 'falling'} ${Math.abs(c.tide.rateFtHr).toFixed(1)} ft/hr`, `NOAA ${src.tideName}`, 'fcst');
   else h += row('Tide', 'Not available');
   if (c.water) h += row('Water', `${Math.round(c.water.f)}°F`, c.water.where, c.water.source);

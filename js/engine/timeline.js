@@ -45,12 +45,14 @@ export function windBetweenHours(at, t) {
  * How much to trust a sample's score: 'high' | 'medium' | 'low' | null.
  *  high   — now, every factor present and observed (buoy period + station wind)
  *  medium — forecast within 48 h with every factor present (forecasts carry no wave period)
- *  low    — a factor missing, or more than 48 h ahead
+ *  low    — a factor missing, more than 48 h ahead, or the wave model run is late (stale)
+ * (Pirate Score's waves are a nearshore MODEL, so a score is at most 'medium' unless the
+ * sample's waves are observed.)
  */
 export function confidenceOf(sample, now) {
   if (sample.score == null) return null;
   const ahead = (sample.t - now) / HOUR;
-  if ((sample.coverage ?? 1) < 0.999 || ahead > 48) return 'low';
+  if ((sample.coverage ?? 1) < 0.999 || ahead > 48 || sample.waves?.stale) return 'low';
   if (ahead < 0.25 && sample.wind?.source === 'obs' && sample.waves?.source === 'obs') return 'high';
   return 'medium';
 }
