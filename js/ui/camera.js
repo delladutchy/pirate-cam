@@ -41,6 +41,7 @@ export async function renderMedia(media, c) {
   const token = ++renderToken;
   if (hls) { hls.destroy(); hls = null; }
   media.innerHTML = '';
+  media.dataset.kind = c.kind; // which player is showing (decides whether our full-screen button is needed)
   const retry = () => renderMedia(media, c);
   let e;
   if (c.kind === 'hls') {
@@ -77,4 +78,36 @@ export async function renderMedia(media, c) {
     bug.innerHTML = BUG;
     media.appendChild(bug);
   }
+}
+
+// ---------- full screen ----------
+// Every camera player has its own full-screen control, and we use it wherever it works:
+//  - YouTube: its own button (works everywhere, including iPhone);
+//  - DelDOT HLS <video>: the browser's video controls (iPhone opens Apple's video player);
+//  - Angelcam: its own button, which uses the Fullscreen API — fine on desktop, Android and iPad.
+// iPhone Safari has no Fullscreen API for page elements, so there Angelcam's button can only fill
+// its own small frame. Only in that case we show our button, placed exactly over Angelcam's (one
+// icon, never two): it makes the camera fill the window (rotate to landscape for the largest
+// picture). Exit with the same button or Escape. Provider players are never altered.
+const EXPAND = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>';
+const COLLAPSE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>';
+
+export function createFullscreen(viewer, button) {
+  const doc = document;
+  const elementFs = !!(viewer.requestFullscreen || viewer.webkitRequestFullscreen) && !!(doc.fullscreenEnabled || doc.webkitFullscreenEnabled);
+  doc.documentElement.classList.toggle('no-element-fs', !elementFs); // CSS shows the button only then
+  const isActive = () => viewer.classList.contains('pseudo-fs');
+
+  function set(on) {
+    viewer.classList.toggle('pseudo-fs', on);
+    doc.documentElement.classList.toggle('pseudo-fs-on', on);
+    button.innerHTML = on ? COLLAPSE : EXPAND;
+    button.setAttribute('aria-label', on ? 'Exit full screen' : 'Full screen');
+    button.title = on ? 'Exit full screen' : 'Full screen';
+  }
+  button.addEventListener('click', () => set(!isActive()));
+  // Escape leaves the full-window view (and nothing else reacts to that Escape, e.g. Cam only)
+  doc.addEventListener('keydown', e => { if (e.key === 'Escape' && isActive()) { set(false); e.stopImmediatePropagation(); } });
+  set(false);
+  return { active: isActive, exit: () => set(false) };
 }

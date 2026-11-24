@@ -5,7 +5,7 @@ import { cams, camSlug } from './config/cameras.js';
 import { spots, spotById, resolveHash } from './config/spots.js';
 import { loadSpotData } from './data/load.js';
 import { buildConditions } from './engine/conditions.js';
-import { renderMedia } from './ui/camera.js';
+import { renderMedia, createFullscreen } from './ui/camera.js';
 import { createTideGraph } from './ui/tidegraph.js';
 import { mountScore, updateScore, renderTideSummary, renderDetails, timeLabel } from './ui/conditions.js';
 import { sampleAt } from './map/model.js';
@@ -67,10 +67,6 @@ function showCamera() {
 function showCaption() {
   const spot = spotById(state.spotId), c = state.cam && camBySlug[state.cam];
   if (!c) return;
-  const nearby = !spot.cams.length;
-  $('#camtitle').textContent = nearby ? spot.fullName : c.name;
-  $('#camnote').textContent = nearby ? `No camera here yet · nearest live cam: ${c.name}` : c.note;
-  $('#direct').href = c.href || c.src; // YouTube cams link to their watch page
   $('#camOnlyName').textContent = c.name;
 }
 
@@ -78,9 +74,11 @@ function renderAngles() {
   const spot = spotById(state.spotId);
   const list = spot.cams.length ? spot.cams : spot.nearbyCams || [];
   const el = $('#angles');
-  if (list.length < 2) { el.innerHTML = ''; return; }
+  const nearby = !spot.cams.length; // no camera of its own: the borrowed camera stays labelled as nearby
+  if (list.length < 2 && !nearby) { el.innerHTML = ''; return; }
   const label = slug => { const n = camBySlug[slug].name; return spot.cams.length ? n.replace(/^(Bethany|Inlet) /, '') : n; };
-  el.innerHTML = list.map(s => `<button class="angle ${s === state.cam ? 'active' : ''}" data-cam="${s}">${esc(label(s))}</button>`).join('');
+  el.innerHTML = (nearby ? '<span class="angles-k">Nearby cams</span>' : '') +
+    list.map(s => `<button class="angle ${s === state.cam ? 'active' : ''}" data-cam="${s}">${esc(label(s))}</button>`).join('');
 }
 $('#angles').addEventListener('click', e => { const b = e.target.closest('[data-cam]'); if (b) select(state.spotId, b.dataset.cam); });
 
@@ -296,7 +294,8 @@ function setCamOnly(on) {
 }
 $('#camOnlyBtn').addEventListener('click', () => setCamOnly(true));
 $('#exitCamOnly').addEventListener('click', () => setCamOnly(false));
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && document.body.classList.contains('cam-only')) setCamOnly(false); });
+const camFullscreen = createFullscreen($('.viewer'), $('#fsBtn'));
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && document.body.classList.contains('cam-only') && !camFullscreen.active()) setCamOnly(false); });
 
 // ---------- favorite ----------
 function syncFavorite() {

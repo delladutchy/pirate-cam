@@ -51,11 +51,21 @@ h1{font-family:'Pirata One',Georgia,serif;font-size:34px;letter-spacing:.5px}
 .viewer{background:#000;border:1px solid var(--line);border-radius:14px;overflow:hidden}
 #media{aspect-ratio:16/9;background:#000;position:relative;container-type:size}
 #media iframe,#media video{display:block;width:100%;height:100%;border:0;background:#000}
-.meta{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:var(--panel);border-top:1px solid var(--line);gap:16px}
-.camtitle{font-size:15px;font-weight:600;letter-spacing:-.2px}.camnote{font-size:12px;color:var(--muted);margin-top:3px}
-.direct{font-size:12px;color:var(--accent);text-decoration:none;border:1px solid var(--line);border-radius:8px;padding:9px 11px;white-space:nowrap}
+.cam-frame{position:relative}
+/* full-screen: each player's own control is used (YouTube, the <video> controls, Angelcam).
+   Only where the browser has no element full screen (iPhone) does an Angelcam camera get our button,
+   sitting exactly over Angelcam's own (32 px, 8 px from the corner) so there is one icon. */
+.fs-btn{display:none;position:absolute;right:6px;bottom:4px;z-index:25;width:36px;height:36px;place-items:center;padding:0;border:1px solid rgba(255,255,255,.3);border-radius:6px;background:rgba(8,10,12,.6);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);color:#fff;cursor:pointer;opacity:.85}
+.fs-btn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+html.no-element-fs #media[data-kind=iframe]+.fs-btn{display:grid}
+.fs-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px;opacity:1}
+/* full-window view (iPhone, Angelcam): the 16:9 picture, centred on black */
+.viewer.pseudo-fs{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;height:100vh;height:100dvh;border:0;border-radius:0;background:#000}
+.viewer.pseudo-fs .cam-frame{width:min(100vw,calc(100vh * 16 / 9));width:min(100vw,calc(100dvh * 16 / 9))}
+html.pseudo-fs-on,html.pseudo-fs-on body{overflow:hidden}
 .angles{display:flex;gap:4px;margin-top:6px;min-height:40px}
 .angles:empty{display:none}
+.angles-k{align-self:center;font-size:12px;color:var(--muted);margin-right:12px}
 .angle{appearance:none;border:0;background:transparent;color:var(--muted);padding:10px 4px;margin-right:12px;font-size:13px;cursor:pointer;border-bottom:1px solid transparent}
 .angle.active{color:var(--text);border-bottom-color:var(--text)}
 
@@ -155,8 +165,6 @@ h1{font-family:'Pirata One',Georgia,serif;font-size:34px;letter-spacing:.5px}
 .playhead .ph-txt{fill:var(--text);font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;paint-order:stroke;stroke:var(--bg);stroke-width:4px;stroke-linejoin:round}
 .playhead.instant,.playhead.instant .ph-dot{transition:none}
 
-/* LIVE camera badge — the camera is always real time */
-.livebadge{display:inline-block;font-size:9.5px;font-weight:700;letter-spacing:1px;color:#0a0d10;background:#e06c5a;border-radius:4px;padding:2px 5px;margin-right:8px;vertical-align:2px}
 
 /* full-day Pirate Score graph */
 .daylabel{font-size:12px;color:var(--muted)}
@@ -461,11 +469,12 @@ body[data-state=loading] .tidepanel,body[data-state=loading] .forecast,body[data
 /* camera-only mode */
 .camonly-bar{display:none}
 body.cam-only main>*:not(.layout){display:none}
-body.cam-only .rail,body.cam-only .meta,body.cam-only .angles{display:none}
+body.cam-only .rail,body.cam-only .angles{display:none}
 body.cam-only main{padding:0;width:100%}
 body.cam-only .layout{display:block;margin:0}
+body.cam-only .camcol{max-width:none}
 body.cam-only .viewer{border:0;border-radius:0;height:100vh;height:100dvh;display:flex;align-items:center;background:#000}
-body.cam-only #media{width:100%;max-height:100vh;max-height:100dvh;aspect-ratio:16/9;margin:auto}
+body.cam-only .cam-frame{width:min(100%,calc(100vh * 16 / 9));width:min(100%,calc(100dvh * 16 / 9));margin:auto}
 body.cam-only .camonly-bar{display:flex;position:fixed;top:12px;right:12px;z-index:50;gap:10px;align-items:center;opacity:.25;transition:opacity .2s}
 body.cam-only .camonly-bar:hover,body.cam-only .camonly-bar:focus-within{opacity:1}
 .camonly-bar span{font-size:12px;color:var(--muted)}
@@ -475,7 +484,7 @@ body.cam-only .camonly-bar:hover,body.cam-only .camonly-bar:focus-within{opacity
 @media(max-width:650px){
   main{padding:16px 14px 32px}
   h1{font-size:30px}
-  .viewer{border-radius:10px}.meta{padding:10px 13px}.camtitle{font-size:14px}
+  .viewer{border-radius:10px}
   .big{font-size:46px}
   .facts{gap:4px 16px}.fv{font-size:14px}
   .tidesum{gap:20px}
