@@ -55,8 +55,8 @@ export function createDayGraph(el, { onPick }) {
    *  surface quality). range may be one day or several (5 Days). */
   function render(cond, day, selT, range, opts = {}) {
     const mode = opts.mode === 'waves' ? 'waves' : 'score';
-    const W = Math.max(300, Math.round(el.clientWidth || 640)), H = W < 500 ? 132 : 160;
-    const padL = 22, padR = 6, top = 12, bottom = 20, base = H - bottom;
+    const W = Math.max(300, Math.round(el.clientWidth || 640)), H = W < 500 ? 170 : 196; // ~150 px of graph on a phone
+    const padL = 18, padR = 2, top = 12, bottom = 18, base = H - bottom;
     if (!range) {
       el.innerHTML = `<p class="na">No forecast hours on this day.</p>`;
       geo = null; return;
@@ -127,11 +127,17 @@ export function createDayGraph(el, { onPick }) {
     const cls0 = mode === 'waves' ? (p, q) => 'sf-' + (p.c === q.c ? p.c : p.c === 'none' ? q.c : p.c) : (p, q) => 'dg-' + band((p.v + q.v) / 2);
     const cls = (p, q) => cls0(p, q) + (p.n && q.n ? ' dn' : '');
     let seg = [];
+    // each run of same-coloured steps is ONE filled shape (no seams between 15-min slices)
     const flush = () => {
-      for (let i = 0; i < seg.length - 1; i++) {
-        const p = seg[i], q = seg[i + 1], c = cls(p, q);
-        svg += `<path d="M${X(p.t)},${base}L${X(p.t)},${Y(p.v)}L${X(q.t)},${Y(q.v)}L${X(q.t)},${base}Z" class="dg-fill ${c}"/>`;
-        svg += `<line x1="${X(p.t)}" y1="${Y(p.v)}" x2="${X(q.t)}" y2="${Y(q.v)}" class="dg-line ${c}"/>`;
+      let i = 0;
+      while (i < seg.length - 1) {
+        const c = cls(seg[i], seg[i + 1]);
+        let j = i + 1;
+        while (j < seg.length - 1 && cls(seg[j], seg[j + 1]) === c) j++;
+        const run = seg.slice(i, j + 1).map(p => `${X(p.t).toFixed(1)},${Y(p.v).toFixed(1)}`);
+        svg += `<path d="M${X(seg[i].t).toFixed(1)},${base}L${run.join('L')}L${X(seg[j].t).toFixed(1)},${base}Z" class="dg-fill ${c}"/>`;
+        svg += `<polyline points="${run.join(' ')}" class="dg-line ${c}"/>`;
+        i = j;
       }
       seg = [];
     };

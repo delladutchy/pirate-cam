@@ -16,6 +16,7 @@ import { windRelation } from './engine/score.js';
 import { skimRangeFor, snapToSkim } from './engine/skim.js';
 import { weekOutlook, spotOutlook, spotDayBest } from './engine/week.js';
 import { createWeek } from './ui/week.js';
+import { renderSel, renderDir } from './ui/forecastbar.js';
 import { resolveSelection } from './engine/timeline.js';
 import { recommendFor } from './engine/recommend.js';
 import { compass } from './ui/format.js';
@@ -37,7 +38,7 @@ const REFRESH_MS = 10 * 60e3;
 // selT: the selected forecast time (Date), or null for "now". explicitNow: the user asked for
 // "Now" (the Now buttons) — otherwise, once today's forecast hours are over, the page opens on
 // the next day's best time so PirateCast, the dock and the score card all show the same day.
-const state = { spotId: null, cam: null, results: {}, selT: null, explicitNow: false, view: 'forecast', weekMode: 'all',
+const state = { wxOpen: false, spotId: null, cam: null, results: {}, selT: null, explicitNow: false, view: 'forecast', weekMode: 'all',
   graph: { mode: prefs.pirateCast.mode === 'waves' ? 'waves' : 'score', range: prefs.pirateCast.range === '5d' ? '5d' : 'day' }, r5: 0 }; // results[spotId] = conditions | 'error'
 
 // ---------- routing ----------
@@ -218,6 +219,8 @@ function graphRange(r, day) {
 }
 function syncPcControls() {
   for (const b of document.querySelectorAll('[data-pc]')) { const [k, v] = b.dataset.pc.split(':'); b.setAttribute('aria-pressed', state.graph[k] === v); }
+  $('#piratecastPanel').classList.toggle('wx-open', state.wxOpen);
+  $('#pcMore').hidden = !state.wxOpen;
   $('.wv-legend').hidden = state.graph.mode !== 'waves';
   $('.dg-legend').hidden = state.graph.mode === 'waves';
 }
@@ -227,6 +230,16 @@ document.querySelector('.pc-ctl').addEventListener('click', e => {
   if (state.graph[k] === v) return;
   state.graph[k] = v; prefs.pirateCast = state.graph;
   syncPcControls(); lastDayKey = ''; setTime(state.selT, { from: 'view' });
+});
+// the hourly weather row + legend open from the selected-conditions line (collapsed by default)
+$('#pcSel').addEventListener('click', e => {
+  const b = e.target.closest('.ps-wx'); if (!b) return;
+  state.wxOpen = !state.wxOpen; syncPcControls(); b.setAttribute('aria-expanded', state.wxOpen);
+});
+// tide Details: next high and low, phase, source
+$('.tide-more').addEventListener('click', e => {
+  const open = $('#tideSummary').hidden; $('#tideSummary').hidden = !open; e.currentTarget.setAttribute('aria-expanded', open);
+  e.currentTarget.textContent = open ? 'Less' : 'Details';
 });
 syncPcControls();
 
@@ -252,7 +265,9 @@ function setTime(t, { from = '', dragging = false, step = 0 } = {}) {
   const rec = recommendFor(r, raw, t, r.dayWindows[dayNow.index]);
   updateScore($('#score'), r, shown, { label, isNow: !t, relation, rec, onBackToNow: () => setTime(null, { from: 'back' }) });
   timeDock.show(dockView(r, shown, t, relation));
-  renderTideSummary($('#tideSummary'), r, { t: t || r.now, tide: tideNow }, label);
+  renderTideSummary($('#tideNow'), $('#tideSummary'), r, { t: t || r.now, tide: tideNow }, label);
+  renderSel($('#pcSel'), r, shown, { label, mode: state.graph.mode, open: state.wxOpen });
+  renderDir($('#pcDir'), r, shown, relation);
   // the tide chart shows today's 24 h, or the selected day's; during any drag its window holds still
   tideGraph.render(r, t || r.now, { instant: dragging, hold: dragging, from: dayNow.index ? dayNow.start.getTime() : null });
   // PirateCast + dock: rebuilt only when what they span changes (day, 5-day window, mode, data) —
@@ -331,7 +346,8 @@ const timeDock = createTimeDock($('#timedock'), {
   onNow: () => setTime(null, { from: 'now' }),
   zone: { top: $('#piratecastPanel'), bottom: $('#oceanPanel .om-wrap'), avoid: $('#oceanPanel .om-wrap') }, // never over the map: it has its own controls
   enabled: () => state.view === 'forecast',
-  graphs: [() => $('#dayGraph svg.daygraph'), () => $('#tideGraph svg')], // the ocean map has its own rule (zone.avoid)
+  // never over a graph or PirateCast's readouts (the map has its own rule: zone.avoid)
+  graphs: [() => $('#dayGraph svg.daygraph'), () => $('#tideGraph svg'), () => $('#pcSel'), () => $('#piratecastPanel .pc-row')],
 });
 
 function updateMap() {
@@ -357,7 +373,7 @@ function renderConditions(spotSwitch = false) {
   if (r === undefined || r === 'error') {
     $('#score').className = 'score';
     $('#score').innerHTML = r === 'error' ? '<p class="na">Conditions temporarily unavailable</p>' : '<p class="na loading">Loading conditions…</p>';
-    for (const id of ['#tideSummary', '#tideGraph', '#dayGraph']) $(id).innerHTML = '';
+    for (const id of ['#tideSummary', '#tideGraph', '#dayGraph', '#pcSel', '#pcDir', '#tideNow']) $(id).innerHTML = '';
     tideGraph.reset();
     timeDock.refresh();
     return;

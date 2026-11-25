@@ -36,7 +36,7 @@ export function createTideGraph(el, { onPick }) {
     if (geo && geo.cond === cond && geo.W === W && (drag?.active || (!force && (hold || geo.fromMs === windowFor(cond, selT, dayFrom))))) { place(selT, instant); return; }
     const fromMs = windowFor(cond, selT, dayFrom);
     const from = new Date(fromMs), to = new Date(fromMs + SPAN);
-    const H = W < 500 ? 186 : 206, top = 46, bottom = 26; // top row is reserved for the playhead label
+    const H = W < 500 ? 106 : 132, top = 20, bottom = 18; // compact: ~70 px of curve on a phone; the top row holds the playhead label
     const pts = [];
     for (let t = fromMs; t <= to.getTime(); t += 10 * 60e3) { const d = new Date(t); if (tide.covers(d)) pts.push([t, tide.at(d).height]); }
     if (pts.length < 2) { el.innerHTML = '<p class="na">Tide data temporarily unavailable</p>'; geo = null; return; }
@@ -60,12 +60,14 @@ export function createTideGraph(el, { onPick }) {
     svg += `<path d="${line}L${X(pts.at(-1)[0])},${base}L${X(pts[0][0])},${base}Z" class="area"/><path d="${line}" class="curve"/>`;
     for (let t = Math.ceil(fromMs / (3 * HOUR)) * 3 * HOUR; t <= to.getTime(); t += 3 * HOUR) {
       const x = X(t); if (x < 18 || x > W - 18) continue;
-      svg += `<text x="${x}" y="${H - 8}" class="tick" text-anchor="middle">${hour(new Date(t))}</text>`;
+      svg += `<text x="${x}" y="${H - 5}" class="tick" text-anchor="middle">${hour(new Date(t))}</text>`;
     }
     for (const e of tide.events.filter(e => e.t >= from && e.t <= to)) {
       const x = X(e.t.getTime()), y = Y(e.v);
       const anchor = x < 40 ? 'start' : x > W - 40 ? 'end' : 'middle';
-      svg += `<circle cx="${x}" cy="${y}" r="2.5" class="hl"/><text x="${x}" y="${y - 9}" class="hltxt" text-anchor="${anchor}">${e.type} ${e.v.toFixed(1)} · ${short(e.t)}</text>`;
+      // highs labelled just under the crest, lows just above the trough: inside the curve's band,
+      // clear of the playhead label (top) and the hours (bottom)
+      svg += `<circle cx="${x}" cy="${y}" r="2.5" class="hl"/><text x="${x}" y="${e.type === 'H' ? y + 14 : y - 7}" class="hltxt" text-anchor="${anchor}">${e.type} ${e.v.toFixed(1)} · ${short(e.t)}</text>`;
     }
     const n = tide.covers(now) ? tide.at(now) : null;
     if (n && now >= from) {

@@ -137,13 +137,18 @@ export function updateScore(el, cond, s, { onBackToNow, label, isNow = s === con
   if (hasDir) rotateTo(arrow, s.wind.fromDeg + 180); // arrow shows where the wind blows
 }
 
-// ---------- tide summary (follows selection) ----------
-export function renderTideSummary(el, cond, s, label) {
-  if (!cond.tide || !s.tide) { el.innerHTML = ''; return; }
+// ---------- tide: one compact line + Details (follows the selection) ----------
+/** head: "Tide · 3.3 ft ↓"; details: the next high and low (times, heights), the phase and rate,
+ *  and where the prediction comes from. */
+export function renderTideSummary(head, details, cond, s, label) {
+  if (!cond.tide || !s.tide) { head.innerHTML = '<span class="muted">Tide unavailable</span>'; details.innerHTML = ''; return; }
+  head.innerHTML = `Tide <i>·</i> <b>${s.tide.height.toFixed(1)} ft ${s.tide.rising ? '↑' : '↓'}</b>`;
   const nh = cond.tide.nextHigh(s.t), nl = cond.tide.nextLow(s.t);
   const ev = (k, e) => (e ? `<div><div class="k">Next ${k}</div><div class="v">${time(e.t)}</div><div class="s">${ft(e.v)}</div></div>` : '');
   const order = nh && nl && nl.t < nh.t ? [['low', nl], ['high', nh]] : [['high', nh], ['low', nl]];
-  el.innerHTML = `<div><div class="k">${label ? (label === 'Now' ? 'Tide now' : 'Tide ' + label) : s === cond.timeline[0] ? 'Tide now' : 'Tide ' + whenLabel(s, cond)}</div><div class="v">${s.tide.height.toFixed(1)} ft</div><div class="s">${s.tide.rising ? 'Rising' : 'Falling'}</div></div>${order.map(([k, e]) => ev(k, e)).join('')}`;
+  const rate = Number.isFinite(s.tide.rateFtHr) ? ` · ${Math.abs(s.tide.rateFtHr).toFixed(1)} ft/hr` : '';
+  details.innerHTML = `<div><div class="k">${label && label !== 'Now' ? esc(label) : 'Now'}</div><div class="v">${s.tide.height.toFixed(1)} ft</div><div class="s">${s.tide.rising ? 'Rising' : 'Falling'}${rate}</div></div>${order.map(([k, e]) => ev(k, e)).join('')}`
+    + `<p class="tide-src">NOAA tide predictions · ${esc(cond.spot.sources?.tideName || 'NOAA CO-OPS')} · heights above MLLW</p>`;
 }
 
 // ---------- details (current observations; secondary) ----------

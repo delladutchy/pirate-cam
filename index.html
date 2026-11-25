@@ -61,22 +61,25 @@
   </section>
 
   <section class="panel forecast" id="piratecastPanel" aria-label="PirateCast forecast">
-    <div class="pchead"><h3>PirateCast</h3><span id="dayLabel" class="daylabel"></span>
-      <div class="pc-ctl">
-        <div class="seg" role="group" aria-label="Graph"><button type="button" data-pc="mode:score" aria-pressed="true">Skim Score</button><button type="button" data-pc="mode:waves" aria-pressed="false">Waves</button></div>
-        <div class="seg" role="group" aria-label="Range"><button type="button" data-pc="range:day" aria-pressed="true">Day</button><button type="button" data-pc="range:5d" aria-pressed="false">5 Days</button></div>
-      </div>
+    <div class="pchead"><h3>PirateCast</h3><span id="dayLabel" class="daylabel"></span></div>
+    <div class="pc-ctl">
+      <div class="seg" role="group" aria-label="Graph"><button type="button" data-pc="mode:score" aria-pressed="true">PirateCast</button><button type="button" data-pc="mode:waves" aria-pressed="false">Waves</button></div>
+      <div class="seg" role="group" aria-label="Range"><button type="button" data-pc="range:day" aria-pressed="true">Day</button><button type="button" data-pc="range:5d" aria-pressed="false">5 Days</button></div>
     </div>
     <div id="dayGraph" class="daygraph-wrap"></div>
-    <p class="legend wv-legend" hidden title="Estimated from wind and wave period; not part of Pirate Score. Heights: NOAA NWPS."><span class="sw sf-c"></span>Clean <span class="sw sf-f"></span>Fair <span class="sw sf-x"></span>Choppy <span class="lg-note">est.</span> <span class="lg-moon"></span>Night</p>
-    <p class="legend dg-legend"><span class="sw g"></span>7+ <span class="sw a"></span>5–6.9 <span class="sw r"></span>&lt;5 <span class="sw best"></span>Best <span class="lg-moon"></span>Night <span class="lg-note"><u class="lg-low">5.0</u> less certain</span></p>
-  </section>
-
-  <section class="panel tidepanel" aria-label="Tide">
-    <h3>Tide</h3>
-    <div id="tideSummary" class="tidesum"></div>
-    <div id="tideGraph" class="tidegraph-wrap"></div>
-    <p class="legend"><span class="sw best"></span>Best <span class="sw night"></span>Night</p>
+    <div class="pc-more" id="pcMore" hidden>
+      <p class="legend wv-legend" hidden><span class="sw sf-c"></span>Clean <span class="sw sf-f"></span>Fair <span class="sw sf-x"></span>Choppy <span class="lg-note">estimated from wind and wave period; not part of Pirate Score · heights: NOAA NWPS</span></p>
+      <p class="legend dg-legend"><span class="sw g"></span>7+ <span class="sw a"></span>5–6.9 <span class="sw r"></span>&lt;5 <span class="sw best"></span>Best <span class="lg-moon"></span>Night <span class="lg-note"><u class="lg-low">5.0</u> less certain</span></p>
+    </div>
+    <div class="pc-sel" id="pcSel" aria-live="polite"></div>
+    <div class="pc-row">
+      <div class="pc-dir" id="pcDir"></div>
+      <div class="tide-head"><span class="tide-now" id="tideNow"></span><button type="button" class="tide-more" aria-expanded="false" aria-controls="tideSummary">Details</button></div>
+    </div>
+    <div class="pc-tide tidepanel">
+      <div id="tideSummary" class="tidesum" hidden></div>
+      <div id="tideGraph" class="tidegraph-wrap"></div>
+    </div>
   </section>
 
   <section class="panel oceanmap" id="oceanPanel" aria-label="Ocean map">

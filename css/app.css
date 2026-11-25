@@ -662,3 +662,95 @@ body:not([data-view=forecast]) main>:not(.top):not(.view):not(.help){display:non
 .help details[open] .more{display:none}
 .om-wrap:has(> .om-top .om-zoom) .om-info{right:54px} /* desktop: beside the +/− column, never under it */
 .om-top>.om-right{pointer-events:none}.om-right>*{pointer-events:auto} /* the row's empty space never blocks the map or a panel */
+
+/* ---------- PirateCast: one compact forecast section ---------- */
+.panel.forecast{margin-top:14px;padding-top:10px}
+.forecast .pchead{margin-bottom:6px}
+.forecast .pc-ctl{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;margin:0 0 4px}
+.forecast .seg button{height:28px}
+.forecast .daygraph-wrap{margin-top:2px}
+@media(max-width:650px){.forecast .daygraph-wrap,.forecast .tidegraph-wrap{margin-left:-6px;margin-right:-6px;width:auto}}
+/* graphs: solid filled areas — Waves in Clean / Fair / Choppy, PirateCast in the score colours */
+.daygraph.waves .dg-fill{opacity:.88}
+.daygraph.waves .dg-line{stroke-width:1.2;opacity:.9}
+.daygraph:not(.waves) .dg-fill{opacity:.5}
+.daygraph.waves .dg-fill.dn{opacity:.34}
+.daygraph.waves .dg-line.dn{opacity:.4}
+.daygraph:not(.waves) .dg-fill.dn{opacity:.16}
+.dg-guide.major{stroke:#222b34}
+/* the hourly weather row and the legend: collapsed until the weather button opens them */
+.forecast:not(.wx-open) .dg-wx{display:none}
+.forecast .dg-wx{height:56px}
+.pc-more{margin:0 0 2px}.pc-more[hidden]{display:none}
+.pc-more .legend{margin:2px 0 0}
+/* the selected-conditions line */
+.pc-sel{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:32px;font-size:14px;font-variant-numeric:tabular-nums}
+.pc-sel:empty{display:none}
+.ps-main{display:flex;align-items:center;gap:6px;min-width:0;white-space:nowrap;overflow:hidden}
+.ps-main i{font-style:normal;color:var(--faint)}
+.ps-v{font-size:17px;font-weight:700;letter-spacing:-.2px}
+.ps-v.low{text-decoration:underline dotted;text-underline-offset:4px;text-decoration-color:rgba(220,229,235,.45)}
+.ps-l{font-weight:600}
+.ps-t{color:var(--muted)}
+.ps-na{color:var(--muted)}
+.ps-moon{display:inline-flex}
+.pc-sel.night .ps-v,.pc-sel.night .ps-l{opacity:.72}
+.pc-sel .tone-firing{color:var(--firing)}.pc-sel .tone-great{color:var(--great)}.pc-sel .tone-good{color:var(--good)}.pc-sel .tone-ok{color:var(--ok)}.pc-sel .tone-maybe{color:var(--maybe)}.pc-sel .tone-poor{color:var(--poor)}
+.sf-t-clean{color:#6fcf97}.sf-t-fair{color:#5aa7e0}.sf-t-choppy{color:#d98a7e}
+.ps-wx{appearance:none;flex:0 0 auto;display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);background:none;color:var(--text);border-radius:999px;height:30px;padding:0 8px 0 10px;font-size:13px;cursor:pointer;font-variant-numeric:tabular-nums}
+.ps-wx .wxi{width:15px;height:15px;color:var(--muted)}
+.ps-wx b{font-weight:600}
+.ps-chev{width:14px;height:14px;color:var(--muted);transition:transform .2s}
+.ps-wx[aria-expanded=true] .ps-chev{transform:rotate(180deg)}
+/* the compass + wind / wave readings */
+.pc-dir{display:flex;align-items:center;gap:10px;margin:2px 0 0}
+.pc-dir:empty{display:none}
+.pc-compass{flex:0 0 46px;display:block}
+.cp-ring{fill:#10161c;stroke:var(--line);stroke-width:1}
+.cp-land{fill:#2a2e26;opacity:.9}
+.cp-shore{stroke:#c9b98a;stroke-width:1.4}
+.cp-n{fill:var(--faint);font-size:6.5px;font-weight:700}
+.cp-wind line,.cp-wave line{stroke-width:2;stroke-linecap:round}
+.cp-wind path,.cp-wave path{fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.cp-wind line,.cp-wind path{stroke:var(--text)}
+.cp-wind.rel-offshore line,.cp-wind.rel-offshore path{stroke:var(--sg)}
+.cp-wind.rel-onshore line,.cp-wind.rel-onshore path{stroke:var(--sr)}
+.cp-wind.rel-cross-shore line,.cp-wind.rel-cross-shore path{stroke:var(--sa)}
+.cp-wave line,.cp-wave path{stroke:#5aa7e0;stroke-dasharray:none}
+.pc-dirtx{display:flex;flex-direction:column;gap:2px;font-size:13.5px;font-variant-numeric:tabular-nums;min-width:0}
+.pc-dirtx>div{display:flex;align-items:center;gap:6px;white-space:nowrap}
+.pc-dirtx b{font-weight:600}
+.pd-sw{width:10px;height:3px;border-radius:2px;display:inline-block;background:var(--text)}
+.pd-sw.wave{background:#5aa7e0}
+.pd-sw.wind.rel-offshore{background:var(--sg)}.pd-sw.wind.rel-onshore{background:var(--sr)}.pd-sw.wind.rel-cross-shore{background:var(--sa)}
+.pd-rel{font-size:11.5px;color:var(--muted)}
+.pd-rel.rel-offshore{color:var(--sg)}.pd-rel.rel-onshore{color:var(--sr)}.pd-rel.rel-cross-shore{color:var(--sa)}
+/* tide: one line + Details over a short blue curve */
+.pc-tide{margin-top:8px}
+.tide-head{display:flex;align-items:center;justify-content:space-between;font-size:14px;min-height:26px}
+.tide-now i{font-style:normal;color:var(--faint)}
+.tide-now b{font-weight:600;font-variant-numeric:tabular-nums}
+.tide-more{appearance:none;border:0;background:none;color:var(--accent);font-size:12.5px;cursor:pointer;padding:4px 0}
+.pc-tide .tidesum{margin:4px 0 6px;gap:22px}
+.pc-tide .tidesum[hidden]{display:none}
+.pc-tide .tidesum .v{font-size:15px;margin-top:2px}
+.tide-src{flex-basis:100%;margin:0;font-size:11px;color:var(--faint)}
+.tidegraph .area{fill:rgba(74,152,222,.32)}
+.tidegraph .curve{stroke:#6db3ec;stroke-width:2}
+.tidegraph .hl{fill:#6db3ec}
+.tidegraph .hltxt{font-size:10.5px}
+.tidegraph .playhead .ph-txt{font-size:11.5px}
+/* the map sits right under the forecast */
+.panel.oceanmap{margin-top:12px;padding-top:10px}
+.oceanmap .omhead{margin-bottom:6px}
+/* compass + readings on the left, the tide line on the right — one row */
+.pc-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:2px}
+.pc-row .pc-dir{margin:0;min-width:0}
+.pc-row .tide-head{flex-direction:column;align-items:flex-end;justify-content:center;gap:0;min-height:0;flex:0 0 auto;text-align:right}
+.pc-row .tide-head .tide-more{padding:2px 0 0;font-size:12px}
+.pc-tide{margin-top:4px}
+.forecast .pchead{margin-bottom:4px}
+.panel.oceanmap{margin-top:8px;padding-top:8px}
+.oceanmap .omhead{margin-bottom:6px}
+.oceanmap .omhead h3{margin:0}
+.dg-line{fill:none;stroke-linejoin:round}

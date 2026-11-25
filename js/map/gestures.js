@@ -25,6 +25,9 @@ export function mapOptions(extra = {}) {
  */
 export function setupGestures(map, el, { host = null, hint = true } = {}) {
   el.addEventListener('wheel', e => { if (e.ctrlKey || e.metaKey) { e.preventDefault(); map.setZoom(map.getZoom() + (e.deltaY < 0 ? 0.5 : -0.5)); } }, { passive: false });
+  // iPhone Safari: its own pinch-zoom gesture events would zoom the PAGE under a map pinch — the
+  // map handles the pinch itself (touch-action keeps one-finger scrolling for the page)
+  for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) el.addEventListener(ev, e => e.preventDefault(), { passive: false });
   if (!isCoarse()) return { unlocked: true, setUnlocked() {} };
 
   let unlocked = false, tip = null, tipT = 0, shownTips = 0;

@@ -136,12 +136,10 @@ export function createTimeDock(dock, { onPick, onNow, zone, enabled = () => true
     const laidOut = enabled() && tr.height > 0 && br.height > 0 && !document.body.classList.contains('cam-only'); // hidden while loading / cam-only / other views
     // stop at the map's bottom edge: the credits line and all text sit below it, so they never meet the dock
     const top = tr.top, bottom = br.bottom;
-    // gone once `zone.avoid` (the ocean map, with its own timeline) is really in view — it fills
-    // more than half of the screen above the dock. While only its top part peeks in under the
-    // graphs, PirateCast keeps the dock.
+    // never over `zone.avoid` (the map, with its own controls and timeline): gone as soon as any
+    // of the map reaches the strip the dock would cover
     const av = zone.avoid?.getBoundingClientRect();
-    const mapShown = av ? Math.min(av.bottom, band) - Math.max(av.top, 0) : 0;
-    const overAvoid = !!av && av.height > 0 && av.bottom > band && mapShown > vh * 0.5;
+    const overAvoid = !!av && av.height > 0 && av.top < vh && av.bottom > band;
     // never sit over a graph: PirateCast's score graph or the tide chart — the dock
     // appears in the space between them (titles, weather row, tide summary, legends)
     const covers = graphs.map(f => f()).filter(Boolean).reduce((m, g) => {
