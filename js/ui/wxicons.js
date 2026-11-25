@@ -18,9 +18,9 @@ export function wxCategory(text) {
 
 /** Inline SVG for a condition, in the shared bold set below (the PirateCast WEATHER row).
  *  `label` (the NWS wording) is the accessible name; an unknown condition gets a short dash. */
-export function wxIcon(text) {
+export function wxIcon(text, night = false) {
   const cat = wxCategory(text), label = text || 'Weather not available';
-  const shape = cat === 'unknown' ? '<line x1="5" y1="8" x2="11" y2="8"/>' : BOLD[cat];
+  const shape = cat === 'unknown' ? '<line x1="5" y1="8" x2="11" y2="8"/>' : night && NIGHT[cat] ? NIGHT[cat] : BOLD[cat]; // after dark: a moon, not a sun
   return `<svg class="wxi wxi-${cat}" viewBox="0 0 16 16" width="14" height="14" role="img" aria-label="${esc(label)}" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><title>${esc(label)}</title>${shape}</svg>`;
 }
 
@@ -41,6 +41,13 @@ const BOLD = {
   snow: `<g fill="currentColor" stroke="none">${CLOUD(0, -2.6)}<circle cx="5.2" cy="13" r="1"/><circle cx="8.2" cy="14.6" r="1"/><circle cx="11.2" cy="13" r="1"/></g>`,
   fog: '<line x1="2.5" y1="5" x2="13.5" y2="5"/><line x1="4.5" y1="8" x2="11.5" y2="8"/><line x1="2.5" y1="11" x2="13.5" y2="11"/>',
   unknown: '',
+};
+
+// after dark the sun shapes become a crescent moon (same categories, same NWS condition)
+const CRESCENT = 'M10.3 2.6a5.6 5.6 0 1 0 3.1 9A4.8 4.8 0 0 1 10.3 2.6z';
+const NIGHT = {
+  clear: `<path d="${CRESCENT}" fill="currentColor" stroke="none"/>`,
+  partly: `<path transform="translate(.3 -.4) scale(.6)" d="${CRESCENT}" fill="currentColor" stroke="none"/><g fill="currentColor" class="wxi-gap" stroke-width="1.4">${CLOUD(0.6, 1.9)}</g>`,
 };
 
 /** Bold inline SVG for the weekly cards (same categories / accessible name as wxIcon).

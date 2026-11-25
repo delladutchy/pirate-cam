@@ -1,9 +1,8 @@
-// PIRATECAST HOURS, per spot and day, from the spot's own sunrise/sunset (sun.js — computed,
-// not fetched): exactly 1 h before sunrise → 1 h after sunset. PirateCast, the weather row, the
-// Pirate Score covers exactly these hours (scores included in the hour
-// before sunrise and after sunset); outside them is night: forecasts are shown, no score. Best Window,
-// Day's Best, Best Spot and the weekly outlook additionally keep to daylight (sunrise → sunset).
-// The forecast data itself keeps every night-time point (the tide graph, for one, still shows them).
+// PIRATECAST DAY HOURS, per spot and day, from the spot's own sunrise/sunset (sun.js — computed,
+// not fetched): exactly 1 h before sunrise → 1 h after sunset. Outside them is night: every hour
+// is still forecast and scored (no darkness penalty), and the UI shows night as night (muted
+// colours, darker ground, a moon). Best Window, Day's Best, Best Spot and the weekly outlook keep
+// to daylight (sunrise → sunset).
 // Pure: no DOM, no I/O.
 export const SKIM_MARGIN_MS = -3600e3; // negative margin = wider than daylight: sunrise − 1 h → sunset + 1 h
 

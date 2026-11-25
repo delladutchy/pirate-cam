@@ -1,6 +1,8 @@
 // OCEAN MAP — the environmental map section. One engine for every variable:
-//   basemap (Map | Satellite, Dark | Light) + scalar colour field + directional motion
-//   + Pirate View spots + optional buoy observations + legend + timeline + point inspector.
+//   basemap (Satellite by default | Map, Dark | Light) + scalar colour field + directional motion
+//   + Pirate View spots + optional buoy observations + point inspector, with two small panels:
+//   Forecast (time, timeline, previous / play / next — collapsible) and Info (layer, legend,
+//   source and model run or observation time). It shares its area with the simple Wind map.
 // Data arrive as normalized frames (sources.js); the UI never depends on which model made them.
 // Radar is NOAA/NWS MRMS (via NOAA nowCOAST) through the radar module — OBSERVED, past → now, it never
 // follows a forecast time.
@@ -18,10 +20,11 @@ import { SCALES, cssColor } from './scales.js';
 import { createSources, frameList, nearestFrame, sampleField, sampleDir, nearestFilled, SOURCES } from './sources.js';
 import { BASE, DETAIL, TOPO } from '../map/provider.js';
 import { mapMarkers } from '../map/model.js';
+import { mapOptions, setupGestures, isCoarse } from '../map/gestures.js';
 import { createRadar } from '../map/radar.js';
 import { reducedMotion } from '../ui/motion.js';
 import { prefs } from '../prefs.js';
-import { compass, esc } from '../ui/format.js';
+import { compass, esc, MOON } from '../ui/format.js';
 
 // Default framing: Cape May / Delaware Bay → Delaware beaches → Ocean City → Assateague, with
 // enough Atlantic to the east to see swell coming in.
@@ -57,10 +60,11 @@ const ICONS = {
   plus: SVG('<path d="M10 4.5v11M4.5 10h11"/>'),
   minus: SVG('<path d="M4.5 10h11"/>'),
   close: SVG('<path d="m5.5 5.5 9 9M14.5 5.5l-9 9"/>'),
+  info: SVG('<circle cx="10" cy="10" r="7.4"/><path d="M10 9v5"/><circle cx="10" cy="6.2" r=".6" fill="currentColor"/>'),
 };
 
 let leafletLoading = null;
-function loadLeaflet() {
+export function loadLeaflet() {
   if (window.L) return Promise.resolve(window.L);
   if (!leafletLoading) {
     leafletLoading = new Promise((resolve, reject) => {
@@ -90,25 +94,26 @@ export function createOceanMap(section, { onSelectSpot, onTime = () => {}, sourc
   const ui = {
     layer: LAYERS[saved.layer] ? saved.layer : 'waves',
     theme: saved.theme === 'light' ? 'light' : 'dark',
-    base: saved.base === 'sat' ? 'sat' : 'map',
+    base: saved.baseSet && saved.base === 'map' ? 'map' : 'sat', // satellite unless the user chose Map
+    baseSet: !!saved.baseSet,
+    timeOpen: saved.timeOpen === true, // the Forecast panel starts collapsed
     buoys: saved.buoys !== false,
     motion: saved.motion !== false,
     legend: !!saved.legend,
   };
-  const save = () => { prefs.ocean = { layer: ui.layer, theme: ui.theme, base: ui.base, buoys: ui.buoys, motion: ui.motion, legend: ui.legend }; };
+  const save = () => { prefs.ocean = { layer: ui.layer, theme: ui.theme, base: ui.base, baseSet: ui.baseSet, buoys: ui.buoys, motion: ui.motion, legend: ui.legend, timeOpen: ui.timeOpen }; };
   const src = injected || createSources();
-  const coarse = window.matchMedia?.('(pointer: coarse)').matches;
+  const coarse = isCoarse();
 
   let L = null, map = null, field = null, flow = null, radar = null, coast = null, base = null;
-  let tiles = { map: null, sat: [] }, markers = {}, buoyMarkers = {}, pinMarker = null;
+  let tiles = { map: null, sat: [] }, markers = {}, icons = {}, buoyMarkers = {}, pinMarker = null;
   let latest = null, lastT = undefined, lastSpot = null, onScreen = false;
   let runs = null, runsErr = false, frames = [], idx = 0, selT = Date.now(), frame = null, frameErr = false, loadingIdx = -1;
-  let playing = false, playTimer = 0, pin = null, rstate = { status: 'off' }, gen = 0;
+  let playing = false, playTimer = 0, pin = null, rstate = { status: 'off' }, gen = 0, shown = true;
 
   // ---------- chrome (built once; map-independent) ----------
   wrap.insertAdjacentHTML('beforeend', `
     <div class="om-top">
-      <div class="om-src" aria-live="polite"></div>
       <div class="om-right">
         <div class="om-menuwrap">
           <button type="button" class="om-pill om-layerbtn" aria-haspopup="true" aria-expanded="false"><span class="ic"></span><span class="nm"></span><span class="ud">${ICONS.updown}</span></button>
@@ -121,33 +126,46 @@ export function createOceanMap(section, { onSelectSpot, onTime = () => {}, sourc
             <div class="om-seg" role="group" aria-label="Basemap"><button type="button" data-base="map">Map</button><button type="button" data-base="sat">Satellite</button></div>
           </div>
         </div>
+        <button type="button" class="om-sq om-infobtn" aria-label="Map info: layer, legend and source" aria-expanded="false">${ICONS.info}</button>
         <button type="button" class="om-sq om-locate" aria-label="Recenter on the selected spot">${ICONS.locate}</button>
-        <div class="om-zoom"><button type="button" class="om-sq om-zin" aria-label="Zoom in">${ICONS.plus}</button><button type="button" class="om-sq om-zout" aria-label="Zoom out">${ICONS.minus}</button></div>
+        ${coarse ? '' : `<div class="om-zoom"><button type="button" class="om-sq om-zin" aria-label="Zoom in">${ICONS.plus}</button><button type="button" class="om-sq om-zout" aria-label="Zoom out">${ICONS.minus}</button></div>`}
       </div>
     </div>
-    <div class="om-legend"><button type="button" class="om-legtab" aria-expanded="false"><span>Legend</span>${ICONS.chev}</button><div class="om-legbody" hidden></div></div>
+    <div class="om-info" role="dialog" aria-label="Map info" hidden>
+      <div class="om-ih"><span class="ic"></span><b class="om-inm"></b><button type="button" class="om-x om-iclose" aria-label="Close info">${ICONS.close}</button></div>
+      <div class="om-legbody"></div>
+      <div class="om-src"></div>
+      <div class="om-ivalid"></div>
+    </div>
     <div class="om-insp" hidden></div>
     <div class="om-time"></div>`);
   const $ = s => wrap.querySelector(s);
-  const menu = $('.om-menu'), layerBtn = $('.om-layerbtn'), legend = $('.om-legend'), legTab = $('.om-legtab'), legBody = $('.om-legbody'), insp = $('.om-insp'), srcEl = $('.om-src');
-  const timeline = createTimeline($('.om-time'), { onPick: (i, o) => pickIndex(i, o), onPlay: () => togglePlay(), onStep: d => step(d) });
+  const topEl = wrap.querySelector(':scope > .om-top'); // the Wind view (same area) has its own top bar
+  const menu = $('.om-menu'), layerBtn = $('.om-layerbtn'), info = $('.om-info'), infoBtn = $('.om-infobtn'), legBody = $('.om-legbody'), insp = $('.om-insp'), srcEl = $('.om-src');
+  const timeline = createTimeline($('.om-time'), { onPick: (i, o) => pickIndex(i, o), onPlay: () => togglePlay(), onStep: d => step(d), open: ui.timeOpen, onToggle: on => { ui.timeOpen = on; save(); } });
 
-  const openMenu = on => { menu.hidden = !on; layerBtn.setAttribute('aria-expanded', String(on)); };
+  // one panel at a time: the layer menu and Info never overlap (the Forecast panel sits at the bottom)
+  const openMenu = on => { menu.hidden = !on; layerBtn.setAttribute('aria-expanded', String(on)); if (on) openInfo(false); };
+  const openInfo = on => { info.hidden = !on; infoBtn.setAttribute('aria-expanded', String(on)); infoBtn.classList.toggle('on', on); if (on) openMenu(false); };
   layerBtn.addEventListener('click', e => { e.stopPropagation(); openMenu(menu.hidden); });
+  infoBtn.addEventListener('click', e => { e.stopPropagation(); openInfo(info.hidden); });
+  $('.om-iclose').addEventListener('click', e => { e.stopPropagation(); openInfo(false); infoBtn.focus(); });
   document.addEventListener('click', e => { if (!menu.hidden && !e.target.closest('.om-menuwrap')) openMenu(false); });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !menu.hidden) { openMenu(false); layerBtn.focus(); } });
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    if (!menu.hidden) { openMenu(false); layerBtn.focus(); } else if (!info.hidden) { openInfo(false); infoBtn.focus(); }
+  });
   menu.addEventListener('click', e => {
     const b = e.target.closest('[data-layer]'); if (b) { setLayer(b.dataset.layer); openMenu(false); return; }
     const t = e.target.closest('[data-theme]'); if (t) { ui.theme = t.dataset.theme; save(); applyLook(); return; }
-    const m = e.target.closest('[data-base]'); if (m) { ui.base = m.dataset.base; save(); applyLook(); }
+    const m = e.target.closest('[data-base]'); if (m) { ui.base = m.dataset.base; ui.baseSet = true; save(); applyLook(); }
   });
   $('.om-buoys').addEventListener('change', e => { ui.buoys = e.target.checked; save(); drawBuoys(); });
   $('.om-motion').addEventListener('change', e => { ui.motion = e.target.checked; save(); flow?.setMotion(ui.motion); });
-  legTab.addEventListener('click', () => { ui.legend = !ui.legend; save(); renderLegend(); });
   $('.om-locate').addEventListener('click', () => recenter(true));
-  $('.om-zin').addEventListener('click', () => map?.zoomIn());
-  $('.om-zout').addEventListener('click', () => map?.zoomOut());
-  [menu, legend, insp, $('.om-top'), $('.om-time')].forEach(el => ['pointerdown', 'dblclick', 'wheel', 'touchstart'].forEach(ev => el.addEventListener(ev, e => e.stopPropagation(), { passive: true })));
+  $('.om-zin')?.addEventListener('click', () => map?.zoomIn());
+  $('.om-zout')?.addEventListener('click', () => map?.zoomOut());
+  [menu, info, insp, topEl, $('.om-time')].forEach(el => ['pointerdown', 'dblclick', 'wheel', 'touchstart'].forEach(ev => el.addEventListener(ev, e => e.stopPropagation(), { passive: true })));
 
   // ---------- lazy init ----------
   // start watching only once the app has laid the page out (while it's loading the page is short
@@ -157,10 +175,7 @@ export function createOceanMap(section, { onSelectSpot, onTime = () => {}, sourc
 
   async function init() {
     try { [L, coast] = await Promise.all([loadLeaflet(), loadCoast()]); } catch { mapEl.innerHTML = '<p class="na">Map temporarily unavailable</p>'; return; }
-    map = L.map(mapEl, {
-      zoomControl: false, scrollWheelZoom: false, dragging: !coarse, touchZoom: !coarse, tap: false,
-      minZoom: 6, maxZoom: 14, attributionControl: false, zoomSnap: 0.5,
-    });
+    map = L.map(mapEl, mapOptions({ minZoom: 6, maxZoom: 14, zoomSnap: 0.5 }));
     map.fitBounds(HOME, { padding: [0, 0] });
     tiles.map = L.tileLayer(TOPO.url, { ...TOPO.options, className: 'om-basemap' });
     tiles.sat = [L.tileLayer(BASE.url, { ...BASE.options, className: 'om-sat' }), L.tileLayer(DETAIL.url, { ...DETAIL.options, className: 'om-sat' })];
@@ -169,32 +184,19 @@ export function createOceanMap(section, { onSelectSpot, onTime = () => {}, sourc
     flow = createFlow(map, L, { reduced: reducedMotion, isWater: (x, y) => field.isWater(x, y) });
     flow.setMotion(ui.motion); flow.setTheme(ui.theme);
     applyLook();
-    if (coarse) setupTouchLock();
-    mapEl.addEventListener('wheel', e => { if (e.ctrlKey || e.metaKey) { e.preventDefault(); map.setZoom(map.getZoom() + (e.deltaY < 0 ? 0.5 : -0.5)); } }, { passive: false });
+    setupGestures(map, mapEl, { host: topEl });
     map.on('click', e => { if (ui.layer === 'radar') return; setPin(e.latlng); });
     map.on('zoomend', () => { mapEl.classList.toggle('om-far', map.getZoom() < 10); placeInspector(); });
     map.on('move', placeInspector);
     mapEl.classList.toggle('om-far', map.getZoom() < 10);
     new IntersectionObserver(es => {
       onScreen = es.some(e => e.isIntersecting);
-      flow.setActive(onScreen && ui.layer !== 'radar' && ui.layer !== 'sst');
+      flow.setActive(onScreen && shown && ui.layer !== 'radar' && ui.layer !== 'sst');
       if (!onScreen && playing) stopPlay();
     }, { threshold: 0.05 }).observe(mapEl);
     if (latest) applyApp();
     drawBuoys();
     setLayer(ui.layer, true);
-  }
-
-  // Phones: the map starts locked so a swipe scrolls the page. Tap "Pan" to drag & pinch.
-  function setupTouchLock() {
-    const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'om-pill om-lock';
-    $('.om-top').prepend(btn);
-    const set = on => {
-      if (on) { map.dragging.enable(); map.touchZoom.enable(); mapEl.classList.add('unlocked'); btn.textContent = 'Done'; btn.setAttribute('aria-label', 'Lock the map so swipes scroll the page'); }
-      else { map.dragging.disable(); map.touchZoom.disable(); mapEl.classList.remove('unlocked'); btn.textContent = 'Pan'; btn.setAttribute('aria-label', 'Unlock the map to pan and pinch-zoom'); }
-    };
-    btn.addEventListener('click', () => set(!mapEl.classList.contains('unlocked')));
-    set(false);
   }
 
   // ---------- look: appearance + basemap ----------
@@ -221,6 +223,8 @@ export function createOceanMap(section, { onSelectSpot, onTime = () => {}, sourc
     const lay = LAYERS[k];
     layerBtn.querySelector('.ic').innerHTML = ICONS[k];
     layerBtn.querySelector('.nm').textContent = lay.label;
+    info.querySelector('.ic').innerHTML = ICONS[k];
+    info.querySelector('.om-inm').textContent = lay.label;
     menu.querySelectorAll('[data-layer]').forEach(b => b.setAttribute('aria-checked', String(b.dataset.layer === k)));
     wrap.classList.toggle('om-radar', k === 'radar');
     renderLegend();
@@ -234,7 +238,7 @@ export function createOceanMap(section, { onSelectSpot, onTime = () => {}, sourc
       return;
     }
     radar?.disable();
-    flow.setActive(onScreen && k !== 'sst');
+    flow.setActive(onScreen && shown && k !== 'sst');
     if (lay.kind !== prevKind || initial || !frames.length) { frames = []; frame = null; }
     loadLayer();
   }
@@ -341,19 +345,21 @@ export function createOceanMap(section, { onSelectSpot, onTime = () => {}, sourc
   function stopPlay() { if (!playing) return; playing = false; clearTimeout(playTimer); playTimer = 0; renderTime(); }
 
   // ---------- rendering: time strip, source, legend ----------
+  /** The Forecast panel, and the same valid / observed time spelled out in Info. */
+  function setTl(o) { timeline.set(o); info.querySelector('.om-ivalid').textContent = o.chipTitle || ''; }
   function renderTime() {
     if (ui.layer === 'radar') return renderRadarTime();
     const lay = LAYERS[ui.layer];
     if (runsErr && !frame) {
-      timeline.set({ frames: [], index: 0, mode: 'single', chip: `${lay.label} · ${UNAVAILABLE}`, unavailable: true, disabled: true });
+      setTl({ frames: [], index: 0, mode: 'single', chip: `${lay.label} · ${UNAVAILABLE}`, unavailable: true, disabled: true });
       renderSource();
       return;
     }
-    if (!frames.length || (lay.kind !== 'sst' && !runs)) { timeline.set({ frames: [], index: 0, mode: 'single', chip: 'Loading…', loading: true, disabled: true }); return; }
+    if (!frames.length || (lay.kind !== 'sst' && !runs)) { setTl({ frames: [], index: 0, mode: 'single', chip: 'Loading…', loading: true, disabled: true }); return; }
     if (lay.kind === 'sst') {
       const t = frames[0].t;
       const fr = t ? freshness('sst', t) : null;
-      timeline.set({
+      setTl({
         frames, index: 0, mode: 'single', loading: !frame,
         chip: t ? `Sea temp · Analysis ${utcDay(t)} · ${fr.age} old` : 'Loading…',
         chipNote: fr?.delayed ? delayedLabel(fr.ageMs) : 'satellite analysis',
@@ -364,7 +370,7 @@ export function createOceanMap(section, { onSelectSpot, onTime = () => {}, sourc
     }
     const f = frames[idx];
     const st = modelStatus();
-    timeline.set({
+    setTl({
       frames, index: idx, mode: 'forecast', playing,
       chip: chipLabel(f.t),
       chipNote: frameErr ? 'not available' : loadingIdx === idx ? 'loading…' : st.delayed ? delayedLabel(st.ageMs) : '',
@@ -394,7 +400,7 @@ export function createOceanMap(section, { onSelectSpot, onTime = () => {}, sourc
     else if (rstate.t) { chip = `RADAR · ${clockET(rstate.t)}`; note = `observed · ${when}`; title = obs; }
     else chip = 'Radar · loading…';
     if (late?.delayed && rstate.status !== 'unavailable') note = delayedLabel(late.ageMs);
-    timeline.set({
+    setTl({
       frames: fr.length ? fr : [], index: rstate.frame ?? 0, mode: 'observed', playing: !!rstate.playing,
       chip, chipNote: note, chipTitle: title, unavailable: rstate.status === 'unavailable' || !!late?.delayed, loading: rstate.status === 'loading', disabled: rstate.status === 'unavailable' || !fr.length,
     });
@@ -421,18 +427,16 @@ export function createOceanMap(section, { onSelectSpot, onTime = () => {}, sourc
         if (st.delayed) late = delayedLabel(st.ageMs);
       }
     } else if (runsErr) late = UNAVAILABLE;
-    srcEl.innerHTML = html + (late ? ` · <em class="om-late">${esc(late)}</em>` : '');
+    srcEl.innerHTML = html + (late ? ` <em class="om-late">${esc(late)}</em>` : '');
     srcEl.classList.toggle('late', !!late);
+    infoBtn.classList.toggle('late', !!late); // a small dot: something is delayed — details in Info
   }
 
   function renderLegend() {
     const lay = LAYERS[ui.layer], sc = lay.scale;
-    legend.classList.toggle('open', ui.legend);
-    legTab.setAttribute('aria-expanded', String(ui.legend));
-    legBody.hidden = !ui.legend;
     const steps = sc.legend;
-    legBody.innerHTML = `<div class="om-legh">${esc(sc.title)} · ${esc(sc.units)}</div>`
-      + steps.map((v, i) => `<div class="om-legs" style="--c:${cssColor(sc, sc.discrete ? v : (i < steps.length - 1 ? (v + steps[i + 1]) / 2 : v + 1))}"><span>${v}${i === steps.length - 1 ? '+' : ''}</span></div>`).join('');
+    legBody.innerHTML = `<div class="om-legh">${esc(sc.units)}</div><div class="om-legrow">`
+      + steps.map((v, i) => `<div class="om-legs" style="--c:${cssColor(sc, sc.discrete ? v : (i < steps.length - 1 ? (v + steps[i + 1]) / 2 : v + 1))}"><span>${v}${i === steps.length - 1 ? '+' : ''}</span></div>`).join('') + '</div>';
   }
 
   function renderCredits() {
@@ -441,7 +445,7 @@ export function createOceanMap(section, { onSelectSpot, onTime = () => {}, sourc
       : 'Map: <a href="https://www.usgs.gov/programs/national-geospatial-program/national-map" target="_blank" rel="noopener">USGS The National Map</a>';
     // a short line stays visible (the imagery credit is required while Satellite is on); the full list opens
     const short = ui.base === 'sat' ? 'Imagery: Sentinel-2 cloudless by EOX · ' : '';
-    creditsEl.innerHTML = `<details class="om-cred"><summary>${short}Data: NOAA · NASA JPL · USGS · Natural Earth — regional model guidance, not a surf forecast <span class="om-more">Sources</span></summary>
+    creditsEl.innerHTML = `<details class="om-cred"><summary>${short}Data: NOAA · NASA JPL · USGS · Natural Earth <span class="om-more">Sources</span></summary>
       <span>${base} · Coastline: <a href="https://www.naturalearthdata.com" target="_blank" rel="noopener">Natural Earth</a> · Waves: NOAA GFS-Wave (WAVEWATCH III) · Wind: NOAA GFS · Sea temp: MUR SST (NASA JPL) via NOAA CoastWatch ERDDAP · Buoys: NOAA NDBC · Radar: NOAA/NWS MRMS via <a href="https://nowcoast.noaa.gov" target="_blank" rel="noopener">NOAA nowCOAST</a>. Regional model guidance — not a nearshore surf forecast; map data does not feed Pirate Score.</span></details>`;
   }
 
@@ -542,11 +546,12 @@ export function createOceanMap(section, { onSelectSpot, onTime = () => {}, sourc
     for (const m of ms) {
       const near = ms.find(o => o !== m && Math.abs(o.lat - m.lat) < 0.02 && Math.abs(o.lon - m.lon) < 0.02);
       const place = near ? (m.lat < near.lat ? 'below' : 'above') : 'right';
-      const html = `<div class="wm-spot ${m.id === spotId ? 'active' : ''} ${m.tone ? 'tone-' + m.tone : ''} lbl-${place}"><i></i><span class="wm-lbl"><b>${esc(m.name.toUpperCase())}</b>${m.score != null ? ` ${m.score.toFixed(1)}` : ''}</span></div>`;
+      const html = `<div class="wm-spot ${m.id === spotId ? 'active' : ''} ${m.tone ? 'tone-' + m.tone : ''}${m.night ? ' night' : ''} lbl-${place}"><i></i><span class="wm-lbl"><b>${esc(m.name.toUpperCase())}</b>${m.score != null ? ` ${m.night ? MOON : ''}${m.score.toFixed(1)}` : ''}</span></div>`;
       if (!markers[m.id]) {
         markers[m.id] = L.marker([m.lat, m.lon], { icon: L.divIcon({ className: 'wm-icon', html, iconSize: [0, 0] }), keyboard: true, title: m.fullName, riseOnHover: true })
           .on('click', () => onSelectSpot(m.id)).addTo(map);
-      } else markers[m.id].setIcon(L.divIcon({ className: 'wm-icon', html, iconSize: [0, 0] }));
+      } else if (icons[m.id] !== html) markers[m.id].setIcon(L.divIcon({ className: 'wm-icon', html, iconSize: [0, 0] })); // only when it changed: no flicker while scrubbing
+      icons[m.id] = html;
       markers[m.id].setZIndexOffset(m.id === spotId ? 1000 : 0);
     }
     if (spotId !== lastSpot) { lastSpot = spotId; recenter(false); }
@@ -580,13 +585,20 @@ export function createOceanMap(section, { onSelectSpot, onTime = () => {}, sourc
       if (tKey !== lastT) { lastT = tKey; followApp(data.t); }
       applyApp();
     },
+    /** The Ocean view is the one on screen (false while the Wind view shares the area). */
+    setShown(on) {
+      shown = on;
+      for (const el of [mapEl, topEl, $('.om-time'), info, insp]) el.classList.toggle('om-off', !on);
+      if (!on) { stopPlay(); openMenu(false); openInfo(false); }
+      if (map) { flow.setActive(on && onScreen && ui.layer !== 'radar' && ui.layer !== 'sst'); if (on) map.invalidateSize(); }
+    },
     get ready() { return !!map; },
     get map() { return map; },
     get radar() { return radar; },
     get layer() { return ui.layer; },
     get particles() { return flow; },
     get field() { return field; },
-    get state() { return { layer: ui.layer, theme: ui.theme, base: ui.base, buoys: ui.buoys, motion: ui.motion, legend: ui.legend, idx, frames: frames.length, t: frames[idx]?.t ?? null, playing, loading: loadingIdx >= 0, frameErr, runsErr, run: runs?.[LAYERS[ui.layer]?.kind] ?? null, kind: frame?.kind ?? null, validTime: frame?.validTime ?? null, pin, cache: src.size }; },
+    get state() { return { layer: ui.layer, theme: ui.theme, base: ui.base, buoys: ui.buoys, motion: ui.motion, legend: ui.legend, timeOpen: timeline.open, info: !info.hidden, idx, frames: frames.length, t: frames[idx]?.t ?? null, playing, loading: loadingIdx >= 0, frameErr, runsErr, run: runs?.[LAYERS[ui.layer]?.kind] ?? null, kind: frame?.kind ?? null, validTime: frame?.validTime ?? null, pin, cache: src.size }; },
     setLayer, step, togglePlay, pick: i => pickIndex(i, {}),
     inspect: (lat, lng) => setPin({ lat, lng }),
   };

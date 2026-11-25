@@ -1,10 +1,10 @@
 // Bottom time dock — a navigation tool, not a dashboard: one line with the selected time, Pirate
-// Score, wind, waves and tide, and the coloured scrubber (+ NOW) under it. The scrubber spans the
-// selected day (today from the current hour); night has no score colour. Days are picked in the
-// Weekly Skim Outlook or by dragging the tide chart across midnight.
+// Score, wind, waves and tide, and the coloured scrubber (+ NOW) under it. The scrubber spans what
+// PirateCast spans (the selected day, or 5 days); it is continuous through the night, where the
+// score colours are muted, and a small moon marks a night-time selection.
 // Sits above the iPhone home indicator (safe-area inset). Like every control it only reports
 // picks — the app owns the ONE selected time.
-import { time } from './format.js';
+import { time, MOON } from './format.js';
 import { band } from './daygraph.js';
 import { rotateTo } from './motion.js';
 
@@ -13,7 +13,7 @@ const ARROW = '<svg class="td-warrow" viewBox="0 0 24 24" aria-hidden="true"><pa
 export function createTimeDock(dock, { onPick, onNow, zone, enabled = () => true, graphs = [] }) {
   dock.innerHTML = `
     <div class="td-row" aria-hidden="true">
-      <span class="td-bubble td-when">Now</span>
+      <span class="td-bubble"><span class="td-moon" hidden>${MOON}</span><span class="td-when">Now</span></span>
       <b class="tc tc-score" data-c="score">–</b>
       <span class="tc tc-wind">${ARROW}<b data-c="wind">–</b></span>
       <b class="tc tc-waves" data-c="waves">–</b>
@@ -27,7 +27,7 @@ export function createTimeDock(dock, { onPick, onNow, zone, enabled = () => true
       <button type="button" class="td-now">Now</button>
     </div>`;
   const slider = dock.querySelector('.td-slider');
-  const strip = dock.querySelector('.td-strip'), handle = dock.querySelector('.td-handle'), bubble = dock.querySelector('.td-bubble');
+  const strip = dock.querySelector('.td-strip'), handle = dock.querySelector('.td-handle'), bubble = dock.querySelector('.td-when'), moon = dock.querySelector('.td-moon');
   let ctx = null, drag = null;
 
   dock.querySelector('.td-now').addEventListener('click', onNow);
@@ -43,7 +43,7 @@ export function createTimeDock(dock, { onPick, onNow, zone, enabled = () => true
       const t = t0 + i * span / 96;
       let near = null, d = Infinity;
       for (const s of pts) { const x = Math.abs(s.t - t); if (x < d) { d = x; near = s; } }
-      const c = t < nowMs - 9e5 ? 'past' : !near || d > 9e5 ? 'none' : near.skimmable === false ? 'nt' : near.score != null ? band(near.score) : 'none';
+      const c = t < nowMs - 9e5 ? 'past' : !near || d > 9e5 || near.score == null ? 'none' : band(near.score) + (near.skimmable === false ? 'n' : ''); // night: the same colour, muted
       stops.push(`var(--td-${c}) ${(i / 96 * 100).toFixed(2)}%`);
     }
     strip.style.background = `linear-gradient(90deg, ${stops.join(',')})`;
@@ -54,8 +54,9 @@ export function createTimeDock(dock, { onPick, onNow, zone, enabled = () => true
     place(selT, true);
   }
 
-  function place(selT, instant = false) {
+  function place(selT, instant = false, day = null) {
     if (!ctx) return;
+    if (day) ctx.day = day; // 5 Days: the label follows the selected day
     const t = (selT || ctx.cond.now).getTime();
     const raw = (t - ctx.t0) / ctx.span, f = Math.min(1, Math.max(0, raw));
     handle.classList.toggle('instant', instant || !!drag);
@@ -83,7 +84,7 @@ export function createTimeDock(dock, { onPick, onNow, zone, enabled = () => true
     if (!drag || drag.id !== e.pointerId) return;
     if (!drag.active) {
       const dx = Math.abs(e.clientX - drag.x0), dy = Math.abs(e.clientY - drag.y0);
-      if (dx > 6 && dx > dy) { drag.active = true; slider.setPointerCapture(e.pointerId); dock.classList.add('dragging'); }
+      if (dx > 5 && dx > dy) { drag.active = true; slider.setPointerCapture(e.pointerId); dock.classList.add('dragging'); }
       else return;
     }
     e.preventDefault();
@@ -117,6 +118,7 @@ export function createTimeDock(dock, { onPick, onNow, zone, enabled = () => true
     a.style.visibility = Number.isFinite(vm.windToDeg) ? 'visible' : 'hidden';
     if (Number.isFinite(vm.windToDeg)) rotateTo(a, vm.windToDeg);
     set('tide', vm.tide); set('waves', vm.waves);
+    moon.hidden = !vm.night; sc.classList.toggle('night', !!vm.night);
     dock.setAttribute('aria-label', `Forecast time ${bubble.textContent}: Pirate Score ${vm.score === '–' ? 'none' : vm.score}${vm.low ? ' (lower confidence)' : ''}, wind ${vm.wind}, waves ${vm.waves}, tide ${vm.tide}`);
   }
 

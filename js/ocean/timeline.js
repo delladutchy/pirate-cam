@@ -1,5 +1,6 @@
-// Ocean-map timeline: a day-segmented strip along the bottom of the map, a time chip and
-// previous / play / next buttons. Frames are the source's REAL timesteps; dragging anywhere on
+// Ocean-map Forecast panel: the time chip (always shown — it is also the open/close control),
+// and, when open, a day-segmented strip along the bottom of the map with previous / play / next.
+// Collapsed, only the chip remains, so the map stays clear. Frames are the source's REAL timesteps; dragging anywhere on
 // the strip moves the selection under the finger and snaps to the nearest real frame — nothing
 // is interpolated to make it look continuous. Near either edge while dragging, the strip scrolls.
 //
@@ -24,11 +25,12 @@ const ICON = {
   next: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="m10 5 6 5-6 5zM4 5l6 5-6 5z" fill="currentColor"/></svg>',
   play: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6.5 4.5v11l9-5.5z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>',
   pause: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 4.5v11M13 4.5v11" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>',
+  chev: '<svg class="om-chev" viewBox="0 0 20 20" aria-hidden="true"><path d="m5.5 12.5 4.5-4.5 4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
 };
 
-export function createTimeline(root, { onPick, onPlay, onStep }) {
+export function createTimeline(root, { onPick, onPlay, onStep, open: open0 = false, onToggle = () => {} }) {
   root.innerHTML = `
-    <div class="om-chip" aria-live="polite"></div>
+    <button type="button" class="om-chip" aria-live="polite" aria-expanded="false" aria-label="Forecast time"><span class="om-chiptxt"></span><span class="om-chipbtn">${ICON.chev}</span></button>
     <div class="om-ctrls" role="group" aria-label="Forecast frames">
       <button type="button" class="om-btn om-prev" aria-label="Previous frame">${ICON.prev}</button>
       <button type="button" class="om-btn om-play" aria-label="Play">${ICON.play}</button>
@@ -37,12 +39,21 @@ export function createTimeline(root, { onPick, onPlay, onStep }) {
     <div class="om-strip" role="slider" tabindex="0" aria-label="Forecast time — drag to scrub">
       <div class="om-track"><div class="om-days"></div><div class="om-cells"></div><div class="om-sel"></div></div>
     </div>`;
-  const chip = root.querySelector('.om-chip'), strip = root.querySelector('.om-strip'), track = root.querySelector('.om-track');
+  const chip = root.querySelector('.om-chiptxt'), chipBtn = root.querySelector('.om-chip'), strip = root.querySelector('.om-strip'), track = root.querySelector('.om-track');
   const daysEl = root.querySelector('.om-days'), cellsEl = root.querySelector('.om-cells'), selEl = root.querySelector('.om-sel');
   const playBtn = root.querySelector('.om-play');
   root.querySelector('.om-prev').addEventListener('click', () => onStep(-1));
   root.querySelector('.om-next').addEventListener('click', () => onStep(1));
   playBtn.addEventListener('click', () => onPlay());
+  let open = !!open0;
+  function setOpen(on) {
+    open = on;
+    root.classList.toggle('open', on);
+    chipBtn.setAttribute('aria-expanded', String(on));
+    chipBtn.title = on ? 'Hide the forecast timeline' : 'Show the forecast timeline';
+    if (on && frames.length) { build(); place(); keepVisible(); }
+  }
+  chipBtn.addEventListener('click', () => { setOpen(!open); onToggle(open); });
 
   let frames = [], index = 0, mode = 'forecast', key = '', pxH = 10, scroll = 0, t0 = 0, width = 0, drag = null;
 
@@ -210,6 +221,7 @@ export function createTimeline(root, { onPick, onPlay, onStep }) {
   }
 
   new ResizeObserver(() => { if (frames.length) { build(); place(); keepVisible(); } }).observe(strip);
+  setOpen(open);
 
   return {
     /** frames: [{ t, label? }], index, mode, playing, chip: text, chipNote?, loading?, disabled? */
@@ -223,9 +235,9 @@ export function createTimeline(root, { onPick, onPlay, onStep }) {
       place();
       if (!drag) keepVisible();
       chip.innerHTML = s.chip ? `${esc(s.chip)}${s.chipNote ? `<small>${esc(s.chipNote)}</small>` : ''}` : '';
-      chip.classList.toggle('loading', !!s.loading);
-      chip.classList.toggle('na', !!s.unavailable);
-      chip.hidden = !s.chip;
+      chipBtn.classList.toggle('loading', !!s.loading);
+      chipBtn.classList.toggle('na', !!s.unavailable);
+      chipBtn.hidden = !s.chip;
       if (s.chipTitle) chip.title = s.chipTitle; else chip.removeAttribute('title');
       const one = frames.length <= 1 || mode === 'single';
       root.classList.toggle('single', one);
@@ -236,6 +248,8 @@ export function createTimeline(root, { onPick, onPlay, onStep }) {
       lastPick = index;
     },
     get dragging() { return !!drag; },
+    get open() { return open; },
+    setOpen,
     get scroll() { return scroll; },
   };
 }

@@ -57,7 +57,7 @@
   <section class="panel weekpanel" id="weekPanel" aria-label="Weekly skim outlook — best rated spot and time each day">
     <div class="wk-head"><h3>Skim outlook</h3><div class="wk-mode" role="group" aria-label="Outlook for"><button type="button" data-wday="all" aria-pressed="true">All spots</button><button type="button" data-wday="spot" aria-pressed="false">This spot</button></div><div class="wk-top"></div></div>
     <div class="wk-row"></div>
-    <p class="wk-key" hidden><span class="wk-lowsw">5.0</span> dotted = lower confidence (2+ days out, or a late model run)</p>
+    <p class="wk-key" hidden><span class="wk-lowsw">5.0</span> less certain</p>
   </section>
 
   <section class="panel forecast" id="piratecastPanel" aria-label="PirateCast forecast">
@@ -68,23 +68,25 @@
       </div>
     </div>
     <div id="dayGraph" class="daygraph-wrap"></div>
-    <p class="legend wv-legend" hidden><span class="sw sf-c"></span>Clean <span class="sw sf-f"></span>Fair <span class="sw sf-x"></span>Choppy <span class="lg-note">Estimated surface quality from wind and wave period — separate from Pirate Score. Height: NOAA NWPS nearshore model.</span></p>
-    <p class="legend dg-legend"><span class="sw g"></span>7+ <span class="sw a"></span>5–6.9 <span class="sw r"></span>&lt;5 <span class="sw best"></span>Best <span class="sw nt"></span>Night <span class="lg-note"><u class="lg-low">5.0</u> lower confidence</span></p>
+    <p class="legend wv-legend" hidden title="Estimated from wind and wave period; not part of Pirate Score. Heights: NOAA NWPS."><span class="sw sf-c"></span>Clean <span class="sw sf-f"></span>Fair <span class="sw sf-x"></span>Choppy <span class="lg-note">est.</span> <span class="lg-moon"></span>Night</p>
+    <p class="legend dg-legend"><span class="sw g"></span>7+ <span class="sw a"></span>5–6.9 <span class="sw r"></span>&lt;5 <span class="sw best"></span>Best <span class="lg-moon"></span>Night <span class="lg-note"><u class="lg-low">5.0</u> less certain</span></p>
   </section>
 
   <section class="panel tidepanel" aria-label="Tide">
     <h3>Tide</h3>
     <div id="tideSummary" class="tidesum"></div>
     <div id="tideGraph" class="tidegraph-wrap"></div>
-    <p class="legend"><span class="sw best"></span>Best window <span class="sw night"></span>Night <span class="sw now"></span>Now <span class="sw ph"></span>Selected</p>
+    <p class="legend"><span class="sw best"></span>Best <span class="sw night"></span>Night</p>
   </section>
 
   <section class="panel oceanmap" id="oceanPanel" aria-label="Ocean map">
-    <div class="omhead"><h3>Ocean map</h3></div>
+    <div class="omhead"><h3>Map</h3><div class="seg mapsel" role="group" aria-label="Map"><button type="button" data-map="ocean" aria-pressed="true">Ocean</button><button type="button" data-map="wind" aria-pressed="false">Wind</button></div></div>
     <div class="om-wrap om-dark">
-      <div class="om-map" role="region" aria-label="Interactive ocean map of Delmarva: waves, wave period, wind, radar and sea temperature from NOAA data, with Pirate View spots and buoys. Tap the water for values; drag the timeline to move through the forecast."></div>
+      <div class="om-map" role="region" aria-label="Ocean map of Delmarva: waves, wave period, wind, radar and sea temperature from NOAA data, with Pirate View spots and buoys. Tap the water for values."></div>
+      <div class="wm-box" hidden></div>
     </div>
     <p class="om-credits"></p>
+    <p class="om-credits wm-credits" hidden>Imagery: <a href="https://s2maps.eu" target="_blank" rel="noopener">Sentinel-2 cloudless</a> by <a href="https://eox.at" target="_blank" rel="noopener">EOX</a> (modified Copernicus Sentinel data 2016 &amp; 2017) · USGS · Wind: NOAA CO-OPS &amp; NWS at each beach, blended between them</p>
   </section>
 
 
@@ -100,8 +102,8 @@
   </section>
 
   <footer class="help">
-    Cams: Angelcam, DelDOT · Map imagery: EOX Sentinel-2 cloudless 2016, USGS The National Map, Natural Earth · Tides: NOAA CO-OPS · Wind, temps &amp; weather: NOAA CO-OPS, National Weather Service · Waves &amp; water: NOAA NDBC 44084 · Ocean map: NOAA GFS-Wave, NOAA GFS, MUR SST via NOAA CoastWatch, NOAA NDBC, NOAA/NWS MRMS via NOAA nowCOAST ·
-    Pirate Score is a Pirate View estimate, not an official forecast — check the beach yourself.
+    <details><summary>Pirate Score is an estimate — check the beach yourself. <span class="more">Sources</span></summary>
+    Cams: Angelcam, DelDOT · Map imagery: EOX Sentinel-2 cloudless 2016, USGS The National Map, Natural Earth · Tides: NOAA CO-OPS · Wind, temps &amp; weather: NOAA CO-OPS, National Weather Service · Waves: NOAA NWPS, NOAA NDBC 44084 · Ocean map: NOAA GFS-Wave, NOAA GFS, MUR SST via NOAA CoastWatch, NOAA NDBC, NOAA/NWS MRMS via NOAA nowCOAST · Pirate Score is a Pirate View estimate, not an official forecast.</details>
   </footer>
 </main>
 

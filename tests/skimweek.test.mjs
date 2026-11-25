@@ -97,17 +97,17 @@ test("Day's Best only considers usable skim hours (a better first-light score is
   assert.equal(bestWindow(day).bestScore, 7.1, 'best next window too');
 });
 
-test('darkness is outside the skim window — never called POOR', () => {
+test('darkness is not a recommendation — never called POOR; the map shows the night score as night', () => {
   const r = makeCond('dewey');
   const rec = recommendFor(r, r.timeline[0], null, null);
   assert.equal(rec.kind, 'dark'); assert.doesNotMatch(rec.head + rec.sub, /POOR|Poor conditions/);
   assert.match(rec.head, /Next best|Forecast resumes/);
   const m = mapMarkers([spotById('dewey')], { dewey: r }, null)[0];
-  assert.equal(m.score, null); assert.equal(m.outside, true);
-  assert.equal(scoreSample(spotById('dewey').profile, { ...r.timeline[0] }).label, r.timeline[0].label, 'scoring itself is unchanged (the cap still exists internally)');
+  assert.equal(m.score, r.timeline[0].score); assert.equal(m.night, true);
+  assert.equal(scoreSample(spotById('dewey').profile, { ...r.timeline[0] }).label, r.timeline[0].label, 'the map shows the engine\'s own score');
 });
 
-test('the hour before sunrise and after sunset is scored without a darkness cap; Best Window keeps to daylight', () => {
+test('every hour is scored without a darkness cap; Best Window keeps to daylight', () => {
   const r = makeCond('dewey', { now: new Date('2026-11-23T05:00Z') }); // Mon midnight ET
   const mon = r.skim.find(h => h.start > r.now);
   assert.equal(mon.sunrise - mon.start, H); assert.equal(mon.end - mon.sunset, H);
@@ -121,9 +121,11 @@ test('the hour before sunrise and after sunset is scored without a darkness cap;
   const w = spotDayBest(r, forecastDays(r.timeline, r.now)[0]);
   assert.ok(w.bestT >= mon.sunrise && w.bestT <= mon.sunset && w.start >= mon.sunrise, "Day's Best stays in daylight");
   assert.ok(r.window.bestT >= mon.sunrise && r.window.bestT <= mon.sunset, 'Best Window stays in daylight');
-  // night outside the PirateCast hours keeps the existing cap
-  const night = r.timeline.find(s => s.skimmable === false && s.daylight === false && s.score != null);
-  assert.ok(night.score <= 2);
+  // night outside the PirateCast day hours: the same conditions score, no darkness penalty —
+  // and still never picked as a Best Window / Day's Best (checked above)
+  const nights = r.timeline.filter(s => s.skimmable === false && s.daylight === false);
+  assert.ok(nights.length > 20 && nights.every(s => s.score != null || s.missing), 'every night hour with data has a score');
+  for (const s of nights.filter(x => x.score != null)) assert.equal(s.score, scoreSample(spotById('dewey').profile, { ...s, daylight: true }).score);
 });
 
 // ---------- weekly outlook ----------

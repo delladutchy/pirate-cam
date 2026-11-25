@@ -19,12 +19,14 @@ import { createWeek } from './ui/week.js';
 import { resolveSelection } from './engine/timeline.js';
 import { recommendFor } from './engine/recommend.js';
 import { compass } from './ui/format.js';
-import { createOceanMap } from './ocean/oceanmap.js';
+import { createOceanMap, loadLeaflet } from './ocean/oceanmap.js';
+import { createWindMap } from './map/windmap.js';
 import { esc } from './ui/format.js';
 import { reducedMotion, countUp } from './ui/motion.js';
 import { prefs } from './prefs.js';
 import { shops, shopSection } from './config/shops.js';
-import { lightWord, windowQuality } from './engine/recommend.js';
+import { windowQuality } from './engine/recommend.js';
+import { MOON } from './ui/format.js';
 import { time } from './ui/format.js';
 
 const $ = s => document.querySelector(s);
@@ -126,11 +128,13 @@ $('#angles').addEventListener('click', e => { const b = e.target.closest('[data-
 function renderSpotNav() {
   $('#spots').innerHTML = spots.map(s => {
     const r = state.results[s.id];
-    const sc = r && r !== 'error' && r.timeline[0].skimmable !== false ? r.score : null; // outside skim hours: no live score
-    const val = sc && sc.score != null ? `<span class="sv tone-${sc.tone}"><i></i>${sc.score.toFixed(1)}</span>` : `<span class="sv muted">${r === undefined ? '' : '–'}</span>`;
+    const sc = r && r !== 'error' ? r.score : null;
+    const nt = sc && r.timeline[0].skimmable === false; // night: the score, muted, with a moon
+    const val = sc && sc.score != null ? `<span class="sv tone-${sc.tone}${nt ? ' night' : ''}">${nt ? MOON : '<i></i>'}${sc.score.toFixed(1)}</span>` : `<span class="sv muted">${r === undefined ? '' : '–'}</span>`;
     return `<button class="spot ${s.id === state.spotId ? 'active' : ''}" data-spot="${s.id}" aria-label="${esc(s.fullName)}"><span class="sn">${esc(s.name)}</span>${val}</button>`;
   }).join('');
-  const scored = spots.map(s => state.results[s.id]).filter(r => r && r !== 'error' && r.score.score != null && r.timeline[0].skimmable !== false);
+  // "Best right now" recommends a session, so it keeps to daylight
+  const scored = spots.map(s => state.results[s.id]).filter(r => r && r !== 'error' && r.score.score != null && r.timeline[0].skimmable !== false && r.timeline[0].daylight !== false);
   const allIn = spots.every(s => state.results[s.id] !== undefined);
   const best = scored.sort((a, b) => b.score.score - a.score.score)[0];
   const el = $('#bestNow');
@@ -238,9 +242,9 @@ function setTime(t, { from = '', dragging = false, step = 0 } = {}) {
   if (t && step) { const q = 15 * 60e3, g = new Date(Math.round(t / q) * q); t = g > r.now ? g : t; } // keyboard steps stay on the 15-min forecast grid
   state.selT = t;
   const raw = sampleAt(r.timeline, t);
-  const outside = raw.skimmable === false; // night (outside 1 h before sunrise → 1 h after sunset): conditions, no Pirate Score
+  // night (outside 1 h before sunrise → 1 h after sunset): the same conditions score, shown as night
   const dayNow = viewDay(r, t);
-  const s = outside ? { ...raw, score: null, label: null, tone: null, confidence: null, outside: true } : raw;
+  const s = { ...raw, night: raw.skimmable === false };
   const label = timeLabel(t, r);
   const tideNow = t && r.tide && r.tide.covers(t) ? r.tide.at(t) : s.tide;
   const shown = { ...s, tide: tideNow };
@@ -249,12 +253,14 @@ function setTime(t, { from = '', dragging = false, step = 0 } = {}) {
   updateScore($('#score'), r, shown, { label, isNow: !t, relation, rec, onBackToNow: () => setTime(null, { from: 'back' }) });
   timeDock.show(dockView(r, shown, t, relation));
   renderTideSummary($('#tideSummary'), r, { t: t || r.now, tide: tideNow }, label);
-  tideGraph.render(r, t || r.now, { instant: dragging });
-  // PirateCast + dock: redraw when the day (or the data) changes, otherwise just move the marker
+  // the tide chart shows today's 24 h, or the selected day's; during any drag its window holds still
+  tideGraph.render(r, t || r.now, { instant: dragging, hold: dragging, from: dayNow.index ? dayNow.start.getTime() : null });
+  // PirateCast + dock: rebuilt only when what they span changes (day, 5-day window, mode, data) —
+  // never while a 5-day drag crosses midnight; otherwise only the marker moves
   const day = dayNow, range = graphRange(r, day);
-  const key = [r.spot.id, day.index, +range.start, +range.end, state.graph.mode, +r.now].join('|');
+  const key = [r.spot.id, state.graph.range === '5d' ? '5d' : day.index, +range.start, +range.end, state.graph.mode, +r.now].join('|');
   if (key !== lastDayKey) { lastDayKey = key; dayGraph.render(r, day, t, range, { mode: state.graph.mode, days: dayInfo(r) }); timeDock.render(r, day, t, range); }
-  else { dayGraph.place(t, dragging); timeDock.place(t, dragging); }
+  else { dayGraph.place(t, dragging, day); timeDock.place(t, dragging, day); }
   $('#dayLabel').textContent = `${day.long} · ${day.sub}`;
   if (!dragging) { updateMap(); markWeek(); }
   else scheduleMap();
@@ -267,7 +273,8 @@ function dockView(r, s, t, relation) {
   return {
     score: s.score != null ? s.score.toFixed(1) : '–',
     low: s.confidence === 'low', // shown as the same dotted underline as the weekly outlook
-    label: s.score != null ? s.label : r.score.reason === 'not-configured' ? 'Not rated' : s.outside ? lightWord(s) : 'No data',
+    label: s.score != null ? s.label : r.score.reason === 'not-configured' ? 'Not rated' : 'No data',
+    night: !!s.night,
     tone: s.score != null ? s.tone : null,
     wind: w && Number.isFinite(w.mph) ? (w.mph < 1 ? 'Calm' : `${compass(w.fromDeg)} ${Math.round(w.mph)}`) : '–',
     windToDeg: w && Number.isFinite(w.fromDeg) && w.mph >= 1 ? w.fromDeg + 180 : NaN, // arrow shows where it blows TO
@@ -305,19 +312,33 @@ function pickWeekDay(i) {
 }
 
 const tideGraph = createTideGraph($('#tideGraph'), { onPick: (t, o = {}) => setTime(t, { from: 'graph', dragging: !!o.dragging }) });
-const windMap = createOceanMap($('#oceanPanel'), { onSelectSpot: id => select(id) });
+const oceanMap = createOceanMap($('#oceanPanel'), { onSelectSpot: id => select(id) });
+const windMap = createWindMap($('#oceanPanel .wm-box'), { onSelectSpot: id => select(id), loadLeaflet });
+// Ocean | Wind: two complementary views in ONE map area (the Wind view is built the first time it's chosen)
+function setMapView(v) {
+  prefs.mapView = v;
+  for (const b of document.querySelectorAll('[data-map]')) b.setAttribute('aria-pressed', String(b.dataset.map === v));
+  oceanMap.setShown(v === 'ocean');
+  windMap.setShown(v === 'wind');
+  $('#oceanPanel .om-credits:not(.wm-credits)').hidden = v !== 'ocean';
+  $('#oceanPanel .wm-credits').hidden = v !== 'wind';
+  $('#oceanPanel').dataset.map = v;
+}
+document.querySelector('.mapsel').addEventListener('click', e => { const b = e.target.closest('[data-map]'); if (b) setMapView(b.dataset.map); });
 const dayGraph = createDayGraph($('#dayGraph'), { onPick: (t, o = {}) => setTime(t, { from: 'graph', dragging: !!o.dragging, step: o.step || 0 }) });
 const timeDock = createTimeDock($('#timedock'), {
   onPick: (t, o = {}) => setTime(t, { from: 'dock', dragging: !!o.dragging, step: o.step || 0 }),
   onNow: () => setTime(null, { from: 'now' }),
-  zone: { top: $('#piratecastPanel'), bottom: $('#oceanPanel .om-wrap'), avoid: $('#oceanPanel .om-wrap') }, // never over the ocean map: it has its own timeline
+  zone: { top: $('#piratecastPanel'), bottom: $('#oceanPanel .om-wrap'), avoid: $('#oceanPanel .om-wrap') }, // never over the map: it has its own controls
   enabled: () => state.view === 'forecast',
   graphs: [() => $('#dayGraph svg.daygraph'), () => $('#tideGraph svg')], // the ocean map has its own rule (zone.avoid)
 });
 
 function updateMap() {
   const r = current();
-  windMap.update({ spots, results: state.results, spotId: state.spotId, t: state.selT, label: r ? timeLabel(state.selT, r) : 'Now' });
+  const data = { spots, results: state.results, spotId: state.spotId, t: state.selT, label: r ? timeLabel(state.selT, r) : 'Now' };
+  oceanMap.update(data);
+  windMap.update(data);
 }
 let mapT = 0; // while scrubbing, refresh the map at most ~6×/s
 function scheduleMap() { if (!mapT) mapT = setTimeout(() => { mapT = 0; updateMap(); }, 160); }
@@ -361,10 +382,16 @@ function renderConditions(spotSwitch = false) {
   timeDock.refresh(); // layout changed (panels shown): re-check whether the dock belongs on screen
 }
 
-let resizeT;
+// Redraw the graphs only when the WIDTH changes: iPhone Safari fires resize whenever its toolbar
+// shows or hides during a scroll, and rebuilding then made the graphs flicker under the finger.
+let resizeT, lastW = window.innerWidth;
 window.addEventListener('resize', () => {
   clearTimeout(resizeT);
-  resizeT = setTimeout(() => { const r = current(); if (r) { tideGraph.render(r, state.selT || r.now, { force: true }); lastDayKey = ''; setTime(state.selT, { from: 'resize' }); } }, 150);
+  resizeT = setTimeout(() => {
+    if (window.innerWidth === lastW) return;
+    lastW = window.innerWidth;
+    const r = current(); if (r) { tideGraph.render(r, state.selT || r.now, { force: true }); lastDayKey = ''; setTime(state.selT, { from: 'resize' }); }
+  }, 150);
 });
 
 
@@ -409,8 +436,7 @@ function favCard(id) {
   else if (r) {
     const n = r.timeline[0];
     if (r.score.reason === 'not-configured') now = '<span class="fv-na">Not rated yet</span>';
-    else if (n.skimmable === false) now = `<span class="fv-num">–</span><span class="fv-lbl">${lightWord(n)}</span>`;
-    else if (r.score.score != null) now = `<span class="fv-num tone-${r.score.tone}">${r.score.score.toFixed(1)}</span><span class="fv-lbl tone-${r.score.tone}"><i></i>${r.score.label}</span>`;
+    else if (r.score.score != null) { const nt = n.skimmable === false; now = `<span class="fv-num tone-${r.score.tone}${nt ? ' night' : ''}">${r.score.score.toFixed(1)}</span><span class="fv-lbl tone-${r.score.tone}${nt ? ' night' : ''}">${nt ? MOON : '<i></i>'}${r.score.label}</span>`; }
     else now = `<span class="fv-num">–</span><span class="fv-lbl">${n.missing?.includes('waves') ? 'No wave forecast' : 'No data'}</span>`;
     const w = r.window, q = windowQuality(w);
     if (r.score.reason !== 'not-configured' && w && w.start && q) {
@@ -454,12 +480,13 @@ function renderShop() {
 }
 
 // Test hook, only with ?debug in the URL.
-if (new URLSearchParams(location.search).has('debug')) window.__pv = { state, windMap, oceanMap: windMap, setTime, prefs, get outlook() { return outlook; } };
+if (new URLSearchParams(location.search).has('debug')) window.__pv = { state, windMap, oceanMap, setTime, setMapView, prefs, get outlook() { return outlook; } };
 
 // ---------- start ----------
 const first = initialRoute(), firstView = VIEWS[location.hash] || 'forecast';
 state.view = firstView; // before select(): a #favorites / #shop link keeps its address
 select(first.spotId, first.cam);
+setMapView(prefs.mapView);
 syncFavorite();
 showView(firstView);
 if (prefs.camOnly) setCamOnly(true);

@@ -17,3 +17,5 @@ export const ft = v => `${v.toFixed(1)} ft`;
 export const mins = m => (m < 60 ? `${m} min` : m % 60 === 0 || m >= 180 ? `${Math.round(m / 60)} hr` : `${Math.floor(m / 60)} hr ${m % 60} min`);
 export const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 export const SOURCE_TAG = { obs: 'Observed', fcst: 'Forecast', model: 'Model forecast', est: 'Estimate' };
+/** A small crescent moon: marks night (a forecast and score are still shown). */
+export const MOON = '<svg class="moon" viewBox="0 0 16 16" aria-label="Night" role="img"><path d="M10.6 2.2a6 6 0 1 0 3.2 9.6A5.2 5.2 0 0 1 10.6 2.2z"/></svg>';

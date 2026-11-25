@@ -1,7 +1,6 @@
 // Score card (follows the selected PirateCast time), tide summary, details.
-import { time, hour, compass, ft, esc, SOURCE_TAG } from './format.js';
+import { time, hour, compass, ft, esc, SOURCE_TAG, MOON } from './format.js';
 import { setNumbers, cancelNumberTween, rotateTo } from './motion.js';
-import { lightWord } from '../engine/recommend.js';
 import { surfaceQuality, SURFACE } from '../engine/surface.js';
 
 const etDate = d => d.toLocaleDateString('en-US', { timeZone: 'America/New_York' });
@@ -33,10 +32,10 @@ export function factSentence(s) {
 }
 
 // ---------- score card ----------
-// Compact (about 150 px on a phone): the Pirate Score with its rating and the selected time, one
-// line of advice, then wind · waves · tide · air in one row. Everything else — gusts, wave
-// direction, the model run, confidence and why, the individual factors and the live observations —
-// is one tap away in Details.
+// Minimal (it sits above the camera on a phone): the Pirate Score with its rating and the selected
+// time, then wind · waves · tide · air in one row. A small moon marks night (the score is still the
+// conditions' own). Everything else — the advice line, gusts, wave direction, the model run,
+// confidence and why, the factors and the live observations — is one tap away in Details.
 const ARROW = '<svg class="f-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5l6 10h-4v9h-4v-9H6z"/></svg>';
 export function mountScore(el, cond) {
   const notCfg = cond.score.reason === 'not-configured';
@@ -44,10 +43,9 @@ export function mountScore(el, cond) {
   el.innerHTML = `
     <div class="sc-top">
       ${notCfg ? '<span class="big muted small">Not rated yet</span>' : '<span class="big num" role="img" aria-label="Pirate Score">–</span>'}
-      <span class="sc-meta">${notCfg ? `<span class="lbl muted">No skim profile for ${esc(cond.spot.name)} yet</span>` : '<span class="lbl"><i></i><span class="lbltxt"></span></span>'}<span class="kicker"><span class="mode"></span><span class="when">Now</span></span></span>
+      <span class="sc-meta">${notCfg ? '' : `<span class="lbl"><i></i><span class="sc-moon" hidden>${MOON}</span><span class="lbltxt"></span></span>`}<span class="kicker"><span class="mode"></span><span class="when">Now</span></span></span>
       <button type="button" class="backnow" hidden>Now</button>
     </div>
-    <div class="rec"><b class="rec-h"></b> <span class="rec-s"></span></div>
     <div class="facts">
       <div class="f fwind"><span class="fk">Wind</span><span class="fv">${ARROW}<span data-f="wind">–</span></span></div>
       <div class="f"><span class="fk">Waves</span><span class="fv"><span data-f="waves">–</span></span></div>
@@ -55,6 +53,7 @@ export function mountScore(el, cond) {
       <div class="f"><span class="fk">Air</span><span class="fv"><span data-f="air">–</span></span></div>
     </div>
     <details class="why"><summary>Details</summary>
+      <p class="rec"><b class="rec-h"></b> <span class="rec-s"></span></p>
       <dl class="more"></dl>
       ${notCfg ? '' : '<div class="factors"></div><p class="why-h">Why this score</p><ul></ul>'}
       <p class="fine conf-x"></p>
@@ -73,30 +72,30 @@ function confWhy(s, cond) {
   if (ahead > 48) why.push('it is more than 2 days ahead');
   if (s.waves?.stale) why.push('the wave model run is late');
   if (s.confidence === 'high') return `${CONF.high}: observed wind and buoy waves.`;
-  if (s.confidence === 'medium') return `${CONF.medium}: built from forecasts (NWS wind, NOAA NWPS nearshore waves) within 2 days.`;
-  return `${CONF.low}: ${why.join(', ') || 'forecast inputs are less certain'}. Shown with a dotted underline.`;
+  if (s.confidence === 'medium') return `${CONF.medium}: NWS wind and NOAA NWPS waves, within 2 days.`;
+  return `${CONF.low} (dotted underline): ${why.join(', ') || 'less certain inputs'}.`;
 }
 
 export function updateScore(el, cond, s, { onBackToNow, label, isNow = s === cond.timeline[0], relation = null, rec = null } = {}) {
-  el.querySelector('.mode').textContent = isNow ? '● Live now' : 'Forecast · ';
+  el.querySelector('.mode').textContent = isNow ? '● Live' : '';
   el.querySelector('.mode').classList.toggle('live', isNow);
   el.querySelector('.when').textContent = isNow ? '' : (label || whenLabel(s, cond));
   const back = el.querySelector('.backnow');
   back.hidden = isNow;
   back.onclick = onBackToNow;
   const ul = el.querySelector('.why ul');
+  const moon = el.querySelector('.sc-moon'); if (moon) moon.hidden = !s.night;
   if (s.score != null) {
-    el.className = `score tone-${s.tone}${s.confidence === 'low' ? ' low' : ''}`;
+    el.className = `score tone-${s.tone}${s.confidence === 'low' ? ' low' : ''}${s.night ? ' night' : ''}`;
     setNumbers([{ el: el.querySelector('.num'), format: v => v.toFixed(1) }], s.score); // instant: same value as the dock
     el.querySelector('.lbltxt').textContent = s.label;
     const rs = s.reasons || [];
     if (ul) ul.innerHTML = rs.map(r => `<li class="${r.sign === '+' ? 'pos' : 'neg'}"><b>${r.sign === '+' ? '+' : '−'}</b>${esc(r.text)}</li>`).join('');
   } else if (el.querySelector('.num')) {
     cancelNumberTween();
-    el.className = `score tone-none${s.outside ? ' outside' : ''}`;
+    el.className = `score tone-none${s.night ? ' night' : ''}`;
     el.querySelector('.num').textContent = '–'; el.querySelector('.num').dataset.v = '';
-    // night is not a bad score — there is no score at all
-    el.querySelector('.lbltxt').textContent = s.outside ? lightWord(s) : s.missing?.includes('waves') ? 'No wave forecast' : 'Not enough data';
+    el.querySelector('.lbltxt').textContent = s.missing?.includes('waves') ? 'No wave data' : 'No data';
     if (ul) ul.innerHTML = '';
   }
   const set = (k, v) => { const e = el.querySelector(`[data-f=${k}]`); if (e.textContent !== v) e.textContent = v; };
@@ -112,9 +111,9 @@ export function updateScore(el, cond, s, { onBackToNow, label, isNow = s === con
   const rows = [
     ['Wind', [f.wind, gust, relation ? LONG_REL[relation] : ''].filter(Boolean).join(' · ')],
     ['Waves', s.waves ? [f.waves, Number.isFinite(s.waves.fromDeg) ? `from ${compass(s.waves.fromDeg)} (${Math.round(s.waves.fromDeg)}°)` : '', energy].filter(Boolean).join(' · ') : 'Not available'],
-    ['Surface', (() => { const q = surfaceQuality(cond.spot.profile?.shoreFacingDeg ?? null, s.wind, s.waves); return q ? `${SURFACE[q.cls].label} (estimated) — ${q.why}. Not part of Pirate Score.` : ''; })()],
-    ['Model', s.waves ? (s.waves.source === 'model' ? `${modelLabel(s.waves)}, ~1 km offshore (a model forecast, not a beach measurement)` : WAVE_SRC[s.waves.source] || '') : ''],
-    ['Tide', s.tide ? `${s.tide.height.toFixed(1)} ft, ${s.tide.rising ? 'rising (incoming)' : 'falling (outgoing)'}` : 'Not available'],
+    ['Surface', (() => { const q = surfaceQuality(cond.spot.profile?.shoreFacingDeg ?? null, s.wind, s.waves); return q ? `${SURFACE[q.cls].label} (est.) · ${q.why}` : ''; })()],
+    ['Model', s.waves ? (s.waves.source === 'model' ? `${modelLabel(s.waves)} · ~1 km offshore` : WAVE_SRC[s.waves.source] || '') : ''],
+    ['Tide', s.tide ? `${s.tide.height.toFixed(1)} ft ${s.tide.rising ? '↑' : '↓'}` : 'Not available'],
     ['Weather', [Number.isFinite(s.airF) ? `${Math.round(s.airF)}°F air` : '', water, Number.isFinite(s.pop) ? `rain ${Math.round(s.pop)}%` : ''].filter(Boolean).join(' · ') || 'Not available'],
   ].filter(([, v]) => v);
   el.querySelector('.more').innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('');
@@ -125,7 +124,7 @@ export function updateScore(el, cond, s, { onBackToNow, label, isNow = s === con
       ? `<p class="why-h">Score factors</p>${s.factors.map(x => `<div class="fx"><span>${FK[x.key] || x.key}<i>${Math.round((w[x.key] ?? 0) * 100)}%</i></span><span class="fx-bar"><b style="width:${Math.round(x.q * 100)}%"></b></span><span class="fx-v">${x.q.toFixed(2)}</span></div>`).join('')}`
       : '';
   }
-  el.querySelector('.conf-x').textContent = s.score != null ? confWhy(s, cond) : s.outside ? 'No Pirate Score at night: scores cover 1 h before sunrise to 1 h after sunset. Wind, waves and tide are still forecast.' : '';
+  el.querySelector('.conf-x').textContent = s.score != null ? confWhy(s, cond) + (s.night ? ' Night: best times keep to daylight.' : '') : '';
   const r = el.querySelector('.rec');
   r.className = `rec rec-${rec?.kind || ''}`;
   r.querySelector('.rec-h').textContent = rec?.head || '';
@@ -170,7 +169,6 @@ export function renderDetails(el, cond) {
   const sr = cond.daylight.find(r => r.sunset > cond.now);
   if (sr) h += row(sr.sunrise > cond.now ? 'Sunrise' : 'Sunset', time(sr.sunrise > cond.now ? sr.sunrise : sr.sunset), '');
   const n0 = cond.timeline[0];
-  if (n0.skimmable === false && cond.score.reason !== 'not-configured') h += row('Pirate Score', 'None at night', 'PirateCast covers 1 h before sunrise to 1 h after sunset');
-  else if (cond.score.score != null) h += row('Pirate Score', `${cond.score.score.toFixed(1)} ${cond.score.label}`, 'Pirate View', 'est');
+  if (cond.score.score != null) h += row('Pirate Score', `${cond.score.score.toFixed(1)} ${cond.score.label}${n0.skimmable === false ? ' · night' : ''}`, 'Pirate View', 'est');
   el.innerHTML = h;
 }

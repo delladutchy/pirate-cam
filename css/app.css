@@ -53,8 +53,9 @@ h1 a{color:inherit;text-decoration:none}
    desktop (≥1000 px) keeps the camera first, the outlook below it */
 main{display:flex;flex-direction:column}
 main>.top,main>.spots,main>.bestnow{order:-3}
-@media(max-width:999px){main>.weekpanel{order:-2;margin-top:10px;padding-top:0;border-top:0}}
-.layout{display:grid;grid-template-columns:1fr;gap:14px;margin-top:12px}
+/* phones and tablets: header → beaches → minimal conditions → camera → outlook → PirateCast → tide → map */
+.layout{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;margin-top:10px}
+@media(max-width:999px){.layout>.rail{order:-1}.spothead{margin-bottom:3px}}
 @media(min-width:1000px){.layout{grid-template-columns:minmax(0,1fr) 340px;align-items:start}}
 /* desktop: the live camera is the centerpiece — as wide as the column allows, native 16:9, never
    taller than fits under the header; the forecast follows right below it */
@@ -117,7 +118,7 @@ html.pseudo-fs-on,html.pseudo-fs-on body{overflow:hidden}
 .big.small{font-size:20px;letter-spacing:-.3px;font-weight:500}
 .lbl{font-size:12px;font-weight:700;letter-spacing:1px;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
 .lbl.muted{font-weight:500;letter-spacing:.2px;white-space:normal}
-.rec{margin-top:4px;font-size:13px;color:var(--muted);line-height:18px;height:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rec{margin:2px 0 8px;font-size:13px;color:var(--muted);line-height:1.45}
 .rec .rec-h{color:var(--text);font-weight:650}
 .rec.rec-go .rec-h,.rec.rec-prime .rec-h{color:var(--firing)}.rec.rec-wait .rec-h,.rec.rec-later .rec-h{color:var(--good)}.rec.rec-best .rec-h{color:var(--ok)}.rec.rec-poor .rec-h{color:var(--poor)}
 .rec.rec-nodata .rec-h,.rec.rec-none .rec-h,.rec.rec-dark .rec-h{color:var(--accent)}
@@ -584,3 +585,80 @@ body:not([data-view=forecast]) main>:not(.top):not(.view):not(.help){display:non
 .shop-t{font-size:12px;color:var(--muted);line-height:1.35}
 .shop-go{font-size:12px;color:var(--accent)}
 @media(max-width:380px){.shop-n{font-size:19px}.navbtn svg{display:none}.navbtn{padding:0 11px}}
+
+/* ---------- night: the score is still shown, muted, with a small moon ---------- */
+.moon{width:12px;height:12px;flex:0 0 12px;fill:#aebbd0;display:inline-block;vertical-align:-1px}
+.sc-moon .moon{width:13px;height:13px}
+.sc-moon[hidden],.td-moon[hidden]{display:none}
+.score.night .big{opacity:.62}
+.score.night .lbl{opacity:.75}
+.spot .sv.night{opacity:.7}
+.spot.active .sv.night .moon{fill:#0a0d10}
+.fv-num.night,.fv-lbl.night{opacity:.65}
+.td-moon{display:inline-flex;margin-right:4px}
+.td-bubble{display:inline-flex;align-items:center}
+.tc-score.night{opacity:.62}
+.wm-spot.night .wm-lbl{opacity:.8}.wm-spot .wm-lbl .moon{width:10px;height:10px;margin-right:2px;vertical-align:-1px}
+.lg-moon{display:inline-block;width:10px;height:10px;margin-left:8px;background:no-repeat center/10px url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='%23aebbd0' d='M10.6 2.2a6 6 0 1 0 3.2 9.6A5.2 5.2 0 0 1 10.6 2.2z'/%3E%3C/svg%3E")}
+.dg-moon path{fill:#7f8ea3;opacity:.8}
+/* night stretches of the line: the same colours, muted — the line stays continuous */
+.dg-line.dn{opacity:.42}
+.dg-fill.dn{opacity:.09}
+.daygraph.waves .dg-fill.dn{opacity:.12}
+.dg-night{fill:#0a0e13}
+.dg-nodata{fill:rgba(10,13,16,.72);stroke:#2c3540;stroke-width:1;stroke-dasharray:3 3}
+:root{--td-gn:#2f5a44;--td-an:#6b5530;--td-rn:#5a3a35}
+.why .rec:empty{display:none}
+
+/* ---------- map area: Ocean | Wind ---------- */
+.omhead{align-items:center}
+.mapsel{margin-left:auto}
+.om-off{display:none!important}
+.wm-box{position:absolute;inset:0;z-index:1}
+.wm-box[hidden]{display:none}
+.wm-box .wm-map{position:absolute;inset:0;height:auto;border:0;border-radius:0;background:#0b1218}
+.wm-box .wm-sat{filter:brightness(.66) saturate(.85)}
+.wm-chips{position:absolute;z-index:860;left:10px;right:10px;bottom:10px;display:flex;align-items:center;gap:8px;pointer-events:none;flex-wrap:wrap}
+.wm-when{background:var(--ui-acc);color:#14181d;border-radius:8px;padding:6px 10px;font-size:13px;font-weight:700}
+.wm-wind{background:var(--ui-bg);color:var(--ui-fg);border:1px solid var(--ui-line);border-radius:8px;padding:6px 10px;font-size:13px;font-variant-numeric:tabular-nums}
+.wm-wind:empty{display:none}
+.wm-wind b{font-weight:650;margin-right:4px}
+/* one-finger panning (hand button): highlighted while on */
+.map-hand{margin-right:auto}
+.om-top>.map-hand{order:-1}
+.map-hand[aria-pressed=true]{background:var(--ui-acc);color:#14181d;border-color:var(--ui-acc)}
+.om-wrap.map-unlocked{box-shadow:inset 0 0 0 2px var(--ui-acc)}
+.map-tip{position:absolute;z-index:950;left:50%;top:50%;transform:translate(-50%,-50%);background:rgba(9,17,28,.86);color:#eaf1f7;border-radius:999px;padding:7px 13px;font-size:12.5px;pointer-events:none;opacity:0;transition:opacity .18s ease;white-space:nowrap}
+.map-tip.on{opacity:1}
+/* Info: layer, legend, source, time — a small card under the top controls */
+.om-infobtn.on{background:var(--ui-acc);color:#14181d;border-color:var(--ui-acc)}
+.om-infobtn{position:relative}
+.om-infobtn.late::after{content:"";position:absolute;right:5px;top:5px;width:7px;height:7px;border-radius:50%;background:#f2b05e}
+.om-info{position:absolute;z-index:890;right:10px;top:56px;width:min(260px,calc(100% - 20px));background:var(--ui-bg2);color:var(--ui-fg);border:1px solid var(--ui-line);border-radius:12px;padding:10px 12px 11px;box-shadow:0 10px 30px rgba(0,0,0,.35);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.om-info[hidden]{display:none}
+.om-ih{display:flex;align-items:center;gap:8px;margin:-2px 26px 8px 0;font-size:14px}
+.om-ih .ic svg{width:18px;height:18px;display:block;color:var(--ui-acc)}
+.om-iclose{right:6px;top:6px}
+.om-info .om-legbody{border:0;padding:0;background:none;min-width:0;-webkit-backdrop-filter:none;backdrop-filter:none}
+.om-info .om-legh{text-align:left;padding:0 0 4px}
+.om-legrow{display:flex;border-radius:6px;overflow:hidden}
+.om-legrow .om-legs{flex:1;height:20px;font-size:10.5px}
+.om-info .om-src{position:static;max-width:none;white-space:normal;background:none;border:0;padding:0;margin-top:9px;font-size:11.5px;color:var(--ui-mute);border-radius:0;pointer-events:auto!important}
+.om-info .om-src b{font-size:10px}
+.om-ivalid{font-size:11px;color:var(--ui-mute);margin-top:3px}
+.om-ivalid:empty{display:none}
+/* Forecast panel: the chip is the toggle; collapsed = chip only */
+.om-chip{appearance:none;border:0;display:inline-flex;align-items:center;gap:6px;cursor:pointer;text-align:left;font:inherit;font-size:13px;font-weight:700}
+.om-chiptxt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.om-chipbtn{display:inline-grid;place-items:center;width:18px;height:18px;flex:0 0 18px}
+.om-chev{width:16px;height:16px;transition:transform .2s ease}
+.om-time.open .om-chev{transform:rotate(180deg)}
+.om-time:not(.open) .om-ctrls,.om-time:not(.open) .om-strip{display:none}
+.om-time:not(.open) .om-chip{bottom:10px;max-width:calc(100% - 20px)}
+.om-time.single .om-chipbtn{display:none}
+.help summary{cursor:pointer;list-style:none}
+.help summary::-webkit-details-marker{display:none}
+.help .more{margin-left:4px;text-decoration:underline;text-underline-offset:2px}
+.help details[open] .more{display:none}
+.om-wrap:has(> .om-top .om-zoom) .om-info{right:54px} /* desktop: beside the +/− column, never under it */
+.om-top>.om-right{pointer-events:none}.om-right>*{pointer-events:auto} /* the row's empty space never blocks the map or a panel */

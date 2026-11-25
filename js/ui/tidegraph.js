@@ -2,7 +2,9 @@
 // shared selected time (this module never stores its own selection).
 //
 // - Static layer (curve, night, best window, highs/lows, now pulse) is drawn once
-//   per spot/time-window; only the playhead moves.
+//   per spot/time-window; only the playhead moves. The window is stable: today's 24 h (from 3 h
+//   ago), or the selected day — it never slides along with a selection, and it holds still while
+//   any forecast graph is being dragged.
 // - Tap/click selects a time. Press-and-drag scrubs continuously (Pointer Events +
 //   pointer capture). On touch, `touch-action: pan-y` leaves vertical swipes to the
 //   browser (page scroll) and gives us horizontal drags.
@@ -19,19 +21,20 @@ export function createTideGraph(el, { onPick }) {
   let drag = null;           // { id, x0, y0, active, type }
   let lastT = null;
 
-  function windowFor(cond, selT) {
-    let from = cond.now.getTime() - 3 * HOUR;
-    if (selT && selT.getTime() > from + SPAN - 3 * HOUR) from = selT.getTime() - SPAN / 2;
-    return from;
+  function windowFor(cond, selT, dayFrom) {
+    const today = cond.now.getTime() - 3 * HOUR;
+    if (dayFrom == null) return today;
+    const t = selT ? selT.getTime() : today;
+    return t >= today && t <= today + SPAN ? today : dayFrom; // a selection still inside today's window keeps it
   }
 
-  function render(cond, selT, { force = false, instant = false } = {}) {
+  function render(cond, selT, { force = false, instant = false, hold = false, from: dayFrom = null } = {}) {
     const { tide, now, daylight, window: win } = cond;
     if (!tide) { el.innerHTML = '<p class="na">Tide data temporarily unavailable</p>'; geo = null; return; }
     const W = Math.max(300, Math.round(el.clientWidth || 640));
     // While dragging, the time window is frozen so the graph never jumps under the finger.
-    if (geo && geo.cond === cond && geo.W === W && (drag?.active || (!force && geo.fromMs === windowFor(cond, selT)))) { place(selT, instant); return; }
-    const fromMs = windowFor(cond, selT);
+    if (geo && geo.cond === cond && geo.W === W && (drag?.active || (!force && (hold || geo.fromMs === windowFor(cond, selT, dayFrom))))) { place(selT, instant); return; }
+    const fromMs = windowFor(cond, selT, dayFrom);
     const from = new Date(fromMs), to = new Date(fromMs + SPAN);
     const H = W < 500 ? 186 : 206, top = 46, bottom = 26; // top row is reserved for the playhead label
     const pts = [];

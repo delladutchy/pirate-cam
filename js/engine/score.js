@@ -119,9 +119,8 @@ export function scoreSample(profile, s) {
   if (Number.isFinite(s.pop) && s.pop >= 70) { score -= 1.5; extra.push(['-', 'Rain likely', 1]); }
   else if (Number.isFinite(s.pop) && s.pop >= 40) { score -= 0.6; extra.push(['-', 'Chance of rain', 0.5]); }
   if (Number.isFinite(s.thunder) && s.thunder >= 25) { score = Math.min(score, 3); extra.push(['-', 'Thunderstorms possible', 2]); }
-  // night outside the PirateCast hours stays capped; inside them (1 h either side of daylight) the
-  // score is the conditions' own
-  if (s.daylight === false && s.skimmable !== true) { score = Math.min(score, 2); extra.push(['-', 'After dark', 3]); }
+  // No darkness penalty: at night the score is the conditions' own. Night is shown as night by the
+  // UI, and Best Window / Day's Best / the weekly outlook keep to daylight (usable, below).
   score = Math.round(clamp(score, 0, 10) * 10) / 10;
 
   // Rank reasons by how much each factor helped or hurt, keep it short. A "+" detail of a factor

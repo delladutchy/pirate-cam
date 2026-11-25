@@ -19,7 +19,10 @@ export const prefs = {
   set pirateCast(o) { set('pirateCast', JSON.stringify(o)); },
   get mapMode() { return get('mapMode'); },
   set mapMode(m) { set('mapMode', m); },
-  // ocean map: one JSON blob { layer, theme, base, buoys, motion, legend }
+  /** Which map shares the map area: 'ocean' (default) | 'wind' */
+  get mapView() { return get('mapView') === 'wind' ? 'wind' : 'ocean'; },
+  set mapView(v) { set('mapView', v === 'wind' ? 'wind' : null); },
+  // ocean map: one JSON blob { layer, theme, base, baseSet, buoys, motion, legend, timeOpen }
   get ocean() { try { return JSON.parse(get('ocean') || '{}') || {}; } catch { return {}; } },
   set ocean(o) { set('ocean', o ? JSON.stringify(o) : null); },
 };

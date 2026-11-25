@@ -1,8 +1,9 @@
-// PirateCast — the selected day's Pirate Score graph (Delaware time; today from the current hour),
-// with sunrise and sunset marked, night lightly shaded, a draggable marker and a slim
-// time-aligned weather row underneath. Scores cover 1 h before sunrise → 1 h after sunset; night
-// shows conditions elsewhere but no score line. Holds no selection of its own: it draws the
-// app's shared selected time and reports picks.
+// PirateCast — the selected day's (or 5 days') Pirate Score or wave graph (Delaware time; today
+// from the current hour): one continuous line through day and night. Night (outside 1 h before
+// sunrise → 1 h after sunset) keeps its real score, drawn muted on a darker ground with a small
+// moon; sunrise and sunset are marked. Only genuinely missing forecast data leaves a gap, marked
+// "No data". A draggable marker and a slim time-aligned weather row underneath. Holds no selection
+// of its own: it draws the app's shared selected time and reports picks.
 // - Color follows the existing score labels: ≥ 7 (GOOD and above) green, 5–6.9 (MAYBE/DECENT)
 //   amber, < 5 (POOR) muted red.
 // - Time already past and time without forecast data are shown as such — never filled in.
@@ -38,10 +39,11 @@ export function weatherHours(a, b, width, has = null) {
 export function weatherAt(timeline, t) {
   const s = timeline.find(x => Math.abs(x.t - t) < 8 * 60e3);
   if (!s) return null;
+  const night = s.daylight === false, c = conditionText(s.sky, s.wx);
   return {
-    t: new Date(t),
+    t: new Date(t), night,
     temp: Number.isFinite(s.airF) ? Math.round(s.airF) : null,
-    cond: conditionText(s.sky, s.wx),
+    cond: night && c ? c.replace(/Sunny/, 'Clear') : c,
     pop: Number.isFinite(s.pop) ? Math.round(s.pop) : null,
   };
 }
@@ -64,8 +66,9 @@ export function createDayGraph(el, { onPick }) {
     const pts = cond.timeline.filter(s => s.t >= range.start && s.t < range.end);
     const nowMs = cond.now.getTime();
     const suns = (cond.daylight || []).filter(r => r.sunset.getTime() >= t0 && r.sunrise.getTime() <= t1);
-    const usefuls = (cond.skim || []).filter(r => r.end.getTime() >= t0 && r.start.getTime() <= t1); // scored hours
-    const scored = s => s.score != null && s.skimmable !== false; // no score line at night
+    const usefuls = (cond.skim || []).filter(r => r.end.getTime() >= t0 && r.start.getTime() <= t1); // day hours (the rest is night)
+    const scored = s => s.score != null; // every hour with data, day or night
+    const isNight = s => s.skimmable === false;
     // waves mode: the nearshore wave height (ft) — the y axis fits the data, at least 0–4 ft
     const wv = s => (s.waves && Number.isFinite(s.waves.ft) ? s.waves.ft : null);
     const wMax = Math.max(4, Math.ceil(Math.max(0, ...pts.map(wv).filter(v => v != null)) + 0.5));
@@ -73,11 +76,12 @@ export function createDayGraph(el, { onPick }) {
     const face = cond.spot.profile?.shoreFacingDeg ?? null;
     const surf = s => surfaceQuality(face, s.wind, s.waves)?.cls || 'none';
 
-    const what = mode === 'waves' ? 'Nearshore wave height (NOAA NWPS), coloured by estimated surface quality' : 'Pirate Score, 0 to 10, scored from 1 hour before sunrise to 1 hour after sunset';
+    const what = mode === 'waves' ? 'Nearshore wave height (NOAA NWPS), coloured by estimated surface quality' : 'Pirate Score, 0 to 10; night is shaded';
     let svg = `<svg class="daygraph${mode === 'waves' ? ' waves' : ''}" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="slider" tabindex="0" aria-label="${what} — drag or use arrow keys to choose any time">`;
     svg += `<rect x="${padL}" y="${top}" width="${W - padL - padR}" height="${base - top}" class="dg-day"/>`;
-    // night (outside the scored hours): a slightly darker ground, nothing more
-    const night = (a, b) => { const x0 = X(Math.max(t0, a)), x1 = X(Math.min(t1, b)); if (x1 > x0 + 0.5) svg += `<rect x="${x0}" y="${top}" width="${x1 - x0}" height="${base - top}" class="dg-night"/>`; };
+    // night (outside the PirateCast day hours): a darker ground and a small moon — the line goes on
+    const nights = [];
+    const night = (a, b) => { const x0 = X(Math.max(t0, a)), x1 = X(Math.min(t1, b)); if (x1 > x0 + 0.5) { svg += `<rect x="${x0}" y="${top}" width="${x1 - x0}" height="${base - top}" class="dg-night"/>`; nights.push([x0, x1]); } };
     let cur = t0;
     for (const u of usefuls) { night(cur, u.start.getTime()); cur = Math.max(cur, u.end.getTime()); }
     night(cur, t1);
@@ -85,24 +89,28 @@ export function createDayGraph(el, { onPick }) {
     for (const sun of suns) for (const [t, k] of [[sun.sunrise, 'sunrise'], [sun.sunset, 'sunset']]) {
       if (t.getTime() < t0 || t.getTime() > t1) continue;
       const x = X(t.getTime());
-      svg += `<line x1="${x}" x2="${x}" y1="${top}" y2="${base}" class="dg-sun"/>` + (multi ? '' : `<text x="${x + (k === 'sunrise' ? 3 : -3)}" y="${base - 4}" class="dg-suntxt" text-anchor="${k === 'sunrise' ? 'start' : 'end'}">${k} ${short(t)}</text>`);
+      svg += `<line x1="${x}" x2="${x}" y1="${top}" y2="${base}" class="dg-sun"/>` + (multi ? '' : `<text x="${x + (k === 'sunrise' ? 3 : -3)}" y="${base - 4}" class="dg-suntxt" text-anchor="${k === 'sunrise' ? 'start' : 'end'}" aria-label="${k} ${time(t)}">${k === 'sunrise' ? '↑' : '↓'}${short(t)}</text>`);
     }
     // quiet guides: score 5 and 7, or a few wave heights
     const guides = mode === 'waves' ? [1, 2, 3, 4, 6, 8, 10, 12, 15, 20].filter(v => v < wMax).filter((v, i, a) => a.length <= 4 || v % 2 === 0).slice(-4) : [5, 7];
     for (const v of guides) svg += `<line x1="${padL}" x2="${W - padR}" y1="${Y(v)}" y2="${Y(v)}" class="dg-guide major"/><text x="${padL - 4}" y="${Y(v) + 3.5}" class="dg-axis" text-anchor="end">${v}${mode === 'waves' ? '′' : ''}</text>`;
     // past (today)
     if (nowMs > t0) { const a = X(Math.min(nowMs, t1)); svg += `<rect x="${padL}" y="${top}" width="${a - padL}" height="${base - top}" class="dg-past"/>`; }
+    // genuinely missing forecast data (not night): shaded and labelled, never filled in
+    const val = mode === 'waves' ? wv : s => (scored(s) ? s.score : null);
+    const has = t => pts.some(x => Math.abs(x.t - t) < 8 * 60e3 && val(x) != null);
+    const from = Math.max(t0, Math.ceil((nowMs - 15 * 60e3) / 9e5) * 9e5);
+    let gapA = null;
+    const gap = (a, b) => {
+      if (b - a < 30 * 60e3) return;
+      const x0 = X(a), x1 = X(Math.min(b, t1));
+      svg += `<rect x="${x0}" y="${top}" width="${x1 - x0}" height="${base - top}" class="dg-nodata"/>`;
+      if (x1 - x0 > 54) svg += `<text x="${(x0 + x1) / 2}" y="${(top + base) / 2 + 4}" class="dg-note" text-anchor="middle">No data</text>`;
+    };
+    for (let t = from; t <= t1; t += 9e5) { const ok = t < t1 && has(t); if (!ok && gapA == null) gapA = t; else if (ok && gapA != null) { gap(gapA, t); gapA = null; } }
+    if (gapA != null) gap(gapA, t1);
     if (mode === 'score') {
-      if (!multi) {
-        // no data inside the scored hours (e.g. beyond the wave forecast)
-        const useful = usefuls[0], lastScored = [...pts].reverse().find(scored);
-        const scoreEnd = useful ? Math.min(t1, useful.end.getTime()) : t1;
-        if (lastScored && lastScored.t.getTime() + 15 * 60e3 < scoreEnd) {
-          const a = X(lastScored.t.getTime() + 15 * 60e3), b = X(scoreEnd);
-          svg += `<rect x="${a}" y="${top}" width="${b - a}" height="${base - top}" class="dg-nodata"/>` + (b - a > 70 ? `<text x="${(a + b) / 2}" y="${(top + base) / 2}" class="dg-note" text-anchor="middle">No score data</text>` : '');
-        }
-        if (!pts.some(scored)) svg += `<text x="${W / 2}" y="${(top + base) / 2}" class="dg-note" text-anchor="middle">${cond.score.reason === 'not-configured' ? 'Not rated yet — skim profile not set up' : !useful || nowMs >= useful.end.getTime() ? 'Night — no Pirate Score until 1 h before sunrise' : pts.some(s => s.missing?.includes('waves')) ? 'No nearshore wave forecast — no score this day' : 'Not enough data for a score this day'}</text>`;
-      } else if (!pts.some(scored)) svg += `<text x="${W / 2}" y="${(top + base) / 2}" class="dg-note" text-anchor="middle">${cond.score.reason === 'not-configured' ? 'Not rated yet — skim profile not set up' : 'No Pirate Scores in these days'}</text>`;
+      if (cond.score.reason === 'not-configured') svg += `<text x="${W / 2}" y="${(top + base) / 2}" class="dg-note" text-anchor="middle">Not rated yet</text>`;
       // each day's best window: "BEST" only when it is actually good; weaker days say what they are,
       // poor days get no band at all (on 5 Days: bands only, no words)
       const days = multi ? (opts.days || []).filter(d => d.end > range.start && d.start < range.end) : [day];
@@ -114,12 +122,10 @@ export function createDayGraph(el, { onPick }) {
         svg += `<rect x="${a}" y="${top}" width="${Math.max(2, b - a)}" height="${base - top}" class="dg-best${good ? '' : ' weak'}"/>`;
         if (!multi) { const c = (a + b) / 2, half = good ? 16 : 40; svg += `<text x="${Math.min(Math.max(c, padL + half), W - padR - half)}" y="${top + 10}" class="dg-bestlbl${good ? '' : ' weak'}" text-anchor="middle">${txt}</text>`; }
       }
-    } else if (!pts.some(s => wv(s) != null)) {
-      svg += `<text x="${W / 2}" y="${(top + base) / 2}" class="dg-note" text-anchor="middle">No wave forecast for ${multi ? 'these days' : 'this day'}</text>`;
     }
-    // the curve: filled columns + line per 15-min segment; gaps where there is no value
-    const val = mode === 'waves' ? wv : s => (scored(s) ? s.score : null);
-    const cls = mode === 'waves' ? (p, q) => 'sf-' + (p.c === q.c ? p.c : p.c === 'none' ? q.c : p.c) : (p, q) => 'dg-' + band((p.v + q.v) / 2);
+    // the curve: filled columns + line per 15-min segment, muted at night; gaps only where there is no value
+    const cls0 = mode === 'waves' ? (p, q) => 'sf-' + (p.c === q.c ? p.c : p.c === 'none' ? q.c : p.c) : (p, q) => 'dg-' + band((p.v + q.v) / 2);
+    const cls = (p, q) => cls0(p, q) + (p.n && q.n ? ' dn' : '');
     let seg = [];
     const flush = () => {
       for (let i = 0; i < seg.length - 1; i++) {
@@ -129,15 +135,17 @@ export function createDayGraph(el, { onPick }) {
       }
       seg = [];
     };
-    for (const s of pts) { const v = val(s); if (v == null) flush(); else seg.push({ t: s.t.getTime(), v, c: mode === 'waves' ? surf(s) : null }); }
+    for (const s of pts) { const v = val(s); if (v == null) flush(); else seg.push({ t: s.t.getTime(), v, n: isNight(s), c: mode === 'waves' ? surf(s) : null }); }
     flush();
+    // a small moon in each night stretch wide enough for it
+    for (const [x0, x1] of nights) if (x1 - x0 >= 20) svg += `<g class="dg-moon" transform="translate(${((x0 + x1) / 2 - 5).toFixed(1)},${top + 4})"><path d="M6.6 1.4a3.8 3.8 0 1 0 2 6A3.3 3.3 0 0 1 6.6 1.4z"/></g>`;
     // time axis: whole hours on one day; on 5 Days, the days themselves
     if (multi) {
       for (const d of (opts.days || []).filter(d => d.end > range.start && d.start < range.end)) {
         const x = X(d.start.getTime());
         if (d.start.getTime() > t0) svg += `<line x1="${x}" x2="${x}" y1="${top}" y2="${base}" class="dg-daysep"/>`;
         const mid = X(Math.min(t1, d.end.getTime()) / 2 + Math.max(t0, d.start.getTime()) / 2);
-        svg += `<text x="${mid}" y="${H - 6}" class="dg-axis${d.index === day.index ? ' dg-edge' : ''}" text-anchor="middle">${d.index === 0 ? 'Today' : d.label}</text>`;
+        svg += `<text x="${mid}" y="${H - 6}" class="dg-axis dg-dayl${d.index === day.index ? ' dg-edge' : ''}" data-day="${d.index}" text-anchor="middle">${d.index === 0 ? 'Today' : d.label}</text>`;
       }
     } else {
       const pxh = (W - padL - padR) / (span / HOUR), hstep = [1, 2, 3, 4, 6].find(k => k * pxh >= 36) || 6;
@@ -163,7 +171,7 @@ export function createDayGraph(el, { onPick }) {
         const pop = x.pop != null && x.pop >= 10 ? `${x.pop}%` : '';
         const words = [x.cond || 'Weather not available', x.temp != null ? `${x.temp}°` : '', pop ? `rain ${pop}` : ''].filter(Boolean).join(', ');
         // symbol · temperature · rain chance; the NWS wording is the accessible name and tooltip
-        return `<div class="wxc" style="left:${pct.toFixed(2)}%" data-t="${x.t.getTime()}" aria-label="${hour(x.t)}: ${words}" title="${words}">${wxIcon(x.cond)}<b>${x.temp != null ? x.temp + '°' : '–'}</b><span class="pp">${pop || '&nbsp;'}</span></div>`;
+        return `<div class="wxc" style="left:${pct.toFixed(2)}%" data-t="${x.t.getTime()}" aria-label="${hour(x.t)}: ${words}" title="${words}">${wxIcon(x.cond, x.night)}<b>${x.temp != null ? x.temp + '°' : '–'}</b><span class="pp">${pop || '&nbsp;'}</span></div>`;
       }).join('')}</div>`;
     el.innerHTML = svg + row;
     // cells stay centred on their hour; one that would run past an edge is nudged just inside
@@ -179,8 +187,9 @@ export function createDayGraph(el, { onPick }) {
     place(selT, true);
   }
 
-  function place(selT, instant = false) {
+  function place(selT, instant = false, day = null) {
     if (!geo) return;
+    if (day) for (const a of el.querySelectorAll('.dg-dayl')) a.classList.toggle('dg-edge', +a.dataset.day === day.index); // 5 Days: the selected day's label
     const m = el.querySelector('.dg-marker');
     const t = (selT || geo.cond.now).getTime();
     const inRange = t >= geo.t0 && t <= geo.t1;
@@ -200,7 +209,7 @@ export function createDayGraph(el, { onPick }) {
     m.style.transform = `translateX(${geo.X(t)}px)`;
     m.querySelector('.dg-dot').style.transform = `translateY(${y}px)`;
     m.querySelector('.dg-dot').style.opacity = ok ? 1 : 0;
-    el.querySelector('svg.daygraph').setAttribute('aria-valuetext', `${time(new Date(t))}${!ok ? (geo.mode === 'waves' ? ', no wave forecast' : ', no score') : geo.mode === 'waves' ? `, waves ${v.toFixed(1)} feet${(() => { const q = surfaceQuality(geo.cond.spot.profile?.shoreFacingDeg ?? null, near.wind, near.waves); return q ? ', ' + SURFACE[q.cls].label.toLowerCase() + ' (estimated)' : ''; })()}` : ', Pirate Score ' + v.toFixed(1)}`);
+    el.querySelector('svg.daygraph').setAttribute('aria-valuetext', `${time(new Date(t))}${near && near.skimmable === false ? ', night' : ''}${!ok ? (geo.mode === 'waves' ? ', no wave forecast' : ', no score') : geo.mode === 'waves' ? `, waves ${v.toFixed(1)} feet${(() => { const q = surfaceQuality(geo.cond.spot.profile?.shoreFacingDeg ?? null, near.wind, near.waves); return q ? ', ' + SURFACE[q.cls].label.toLowerCase() + ' (estimated)' : ''; })()}` : ', Pirate Score ' + v.toFixed(1)}`);
   }
 
   const timeAt = clientX => {
@@ -218,7 +227,7 @@ export function createDayGraph(el, { onPick }) {
     if (!drag || e.pointerId !== drag.id) return;
     if (!drag.active) {
       const dx = Math.abs(e.clientX - drag.x0), dy = Math.abs(e.clientY - drag.y0);
-      if (dx > 8 && dx > dy * 1.2) { drag.active = true; el.querySelector('svg.daygraph').setPointerCapture(e.pointerId); } else return;
+      if (dx > 5 && dx > dy) { drag.active = true; el.querySelector('svg.daygraph').setPointerCapture(e.pointerId); } else return;
     }
     e.preventDefault();
     onPick(timeAt(e.clientX), { dragging: true });

@@ -36,8 +36,8 @@ test('strong onshore wind and tiny surf score POOR', () => {
   const r = scoreSample(dewey, { ...ideal, wind: { mph: 22, fromDeg: 100, gustMph: 34 }, waves: { ft: 0.3, periodS: 4 } });
   assert.ok(r.score < 5, r.score); assert.ok(r.reasons.some(x => x.text === 'Onshore wind'));
 });
-test('night caps score, thunder caps score', () => {
-  assert.ok(scoreSample(dewey, { ...ideal, daylight: false }).score <= 2);
+test('night is scored like day (no darkness penalty); thunder caps score', () => {
+  assert.equal(scoreSample(dewey, { ...ideal, daylight: false, skimmable: false }).score, scoreSample(dewey, { ...ideal, daylight: true }).score);
   assert.ok(scoreSample(dewey, { ...ideal, thunder: 40 }).score <= 3);
 });
 test('missing data is never guessed and never re-weighted: an incomplete sample has no score', () => {
