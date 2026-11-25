@@ -166,7 +166,8 @@ export function renderDetails(el, cond) {
     if (c.waveModel) h += row('Waves · nearshore model', `${c.waveModel.ft.toFixed(1)} ft @ ${Math.round(c.waveModel.periodS)} s from ${compass(c.waveModel.fromDeg)} (${Math.round(c.waveModel.fromDeg)}°)`, `${modelLabel(c.waveModel)}, ~1 km offshore · used by Pirate Score`, 'model');
     else h += row('Waves · nearshore model', 'Not available', 'NOAA NWPS · no Pirate Score without it');
   }
-  if (c.tide) h += row('Tide', `${c.tide.height.toFixed(2)} ft, ${c.tide.rising ? 'rising' : 'falling'} ${Math.abs(c.tide.rateFtHr).toFixed(1)} ft/hr`, `NOAA ${src.tideName}`, 'fcst');
+  const ct = c.tide && cond.tideCurve?.at(cond.now), tt = ct ? { ...c.tide, ...ct } : c.tide; // same curve as the chart
+  if (tt) h += row('Tide', `${tt.height.toFixed(2)} ft, ${tt.rising ? 'rising' : 'falling'} ${Math.abs(tt.rateFtHr).toFixed(1)} ft/hr`, `NOAA ${src.tideName}`, 'fcst');
   else h += row('Tide', 'Not available');
   if (c.water) h += row('Water', `${Math.round(c.water.f)}°F`, c.water.where, c.water.source);
   if (c.air) h += row('Air', `${Math.round(c.air.f)}°F`, c.air.where, c.air.source);

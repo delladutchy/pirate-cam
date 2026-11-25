@@ -20,6 +20,30 @@ export async function tideEvents(station) {
   return (data.predictions || []).map(p => ({ t: coopsTime(p.t), v: parseFloat(p.v), type: p.type }));
 }
 
+/** NOAA CO-OPS 6-minute tide predictions over the same span, for drawing the real predicted curve
+ *  (unequal highs and lows, asymmetric rise and fall). Only harmonic stations publish them;
+ *  subordinate stations (e.g. Rehoboth Beach) answer with an error, remembered for a week so the
+ *  request isn't repeated. Stored compactly: start time, step, heights. Null when unavailable. */
+export async function tideSeries(station) {
+  const none = `pv:tide6:none:${station}`;
+  try { if (Date.now() - (+localStorage.getItem(none) || 0) < 7 * 864e5) return null; } catch {}
+  const begin = new Date(Date.now() - 864e5);
+  const url = `${COOPS}&product=predictions&interval=6&datum=MLLW&station=${station}&begin_date=${ymd(begin)}&range=216`;
+  try {
+    return await getJSON(url, { ttlMs: 6 * HOUR, transform: j => {
+      const p = j.predictions || [];
+      if (p.length < 2) return null;
+      const t0 = coopsTime(p[0].t).getTime(), step = coopsTime(p[1].t).getTime() - t0;
+      const v = p.map(x => Math.round(parseFloat(x.v) * 1000) / 1000);
+      if (!(step > 0) || coopsTime(p.at(-1).t).getTime() !== t0 + step * (p.length - 1) || v.some(x => !Number.isFinite(x))) return null; // not an even series
+      return { t0, step, v };
+    } });
+  } catch (e) {
+    if (e && e.message === 'source error') try { localStorage.setItem(none, String(Date.now())); } catch {}
+    return null;
+  }
+}
+
 async function coopsLatest(station, product) {
   const data = await getJSON(`${COOPS}&product=${product}&date=latest&station=${station}`, { ttlMs: 6 * MIN });
   const row = data.data && data.data[0];

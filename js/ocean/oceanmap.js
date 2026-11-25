@@ -110,6 +110,8 @@ export function createOceanMap(section, { onSelectSpot, onTime = () => {}, sourc
   let latest = null, lastT = undefined, lastSpot = null, onScreen = false;
   let runs = null, runsErr = false, frames = [], idx = 0, selT = Date.now(), frame = null, frameErr = false, loadingIdx = -1;
   let playing = false, playTimer = 0, pin = null, rstate = { status: 'off' }, gen = 0, shown = true;
+  // `stale`: the selected time or layer changed while the Ocean view was hidden → sync on open
+  let stale = false;
 
   // ---------- chrome (built once; map-independent) ----------
   wrap.insertAdjacentHTML('beforeend', `
@@ -176,7 +178,7 @@ export function createOceanMap(section, { onSelectSpot, onTime = () => {}, sourc
   async function init() {
     try { [L, coast] = await Promise.all([loadLeaflet(), loadCoast()]); } catch { mapEl.innerHTML = '<p class="na">Map temporarily unavailable</p>'; return; }
     map = L.map(mapEl, mapOptions({ minZoom: 6, maxZoom: 14, zoomSnap: 0.5 }));
-    map.fitBounds(HOME, { padding: [0, 0] });
+    homeFit();
     tiles.map = L.tileLayer(TOPO.url, { ...TOPO.options, className: 'om-basemap' });
     tiles.sat = [L.tileLayer(BASE.url, { ...BASE.options, className: 'om-sat' }), L.tileLayer(DETAIL.url, { ...DETAIL.options, className: 'om-sat' })];
     base = createBase(map, L, coast);
@@ -197,6 +199,15 @@ export function createOceanMap(section, { onSelectSpot, onTime = () => {}, sourc
     if (latest) applyApp();
     drawBuoys();
     setLayer(ui.layer, true);
+  }
+
+  // Fit the Delmarva home view once the map has a real size. Built while hidden (the Wind view is
+  // the default) it is 0×0, and fitting then would leave it stuck at minZoom, far offshore.
+  let homed = false;
+  function homeFit() {
+    if (homed || !map) return;
+    const s = map.getSize(); if (!s.x || !s.y) { map.setView(L.latLngBounds(HOME).getCenter(), 9, { animate: false }); return; }
+    homed = true; map.fitBounds(HOME, { padding: [0, 0], animate: false });
   }
 
   // ---------- look: appearance + basemap ----------
@@ -233,13 +244,14 @@ export function createOceanMap(section, { onSelectSpot, onTime = () => {}, sourc
     if (k === 'radar') {
       field.clear(); flow.set(null); flow.setActive(false); hidePin(false);
       if (!radar) radar = createRadar(map, L, { reduced: reducedMotion, onState: s => { rstate = s; renderRadarTime(); } });
-      radar.enable();
+      if (shown) radar.enable(); else stale = true; // hidden: no radar polling until the map is opened
       renderRadarTime();
       return;
     }
     radar?.disable();
     flow.setActive(onScreen && shown && k !== 'sst');
     if (lay.kind !== prevKind || initial || !frames.length) { frames = []; frame = null; }
+    if (!shown) { stale = true; renderTime(); return; } // hidden: nothing is fetched until the map is opened
     loadLayer();
   }
 
@@ -282,7 +294,7 @@ export function createOceanMap(section, { onSelectSpot, onTime = () => {}, sourc
       if (my !== gen || loadingIdx !== i) return;
       frame = f; frameErr = false; loadingIdx = -1;
       showFrame();
-      src.prefetch(lay.kind, run, frames, i, playing ? 5 : 3);
+      if (shown) src.prefetch(lay.kind, run, frames, i, playing ? 5 : 3);
     } catch {
       if (my !== gen || loadingIdx !== i) return;
       loadingIdx = -1; frameErr = true;
@@ -571,10 +583,20 @@ export function createOceanMap(section, { onSelectSpot, onTime = () => {}, sourc
   function followApp(t) {
     const want = t ? t.getTime() : Date.now();
     selT = want;
+    if (!shown) { stale = true; return; } // hidden: catch up when opened (no forecast requests meanwhile)
     if (!map || ui.layer === 'radar' || ui.layer === 'sst' || !frames.length) return;
     stopPlay();
     const i = nearestFrame(frames, want);
     if (i !== idx || !frame) showIndex(i);
+  }
+
+  /** Opened after being hidden: catch up with the app's beach and selected time, reusing cached frames. */
+  function syncOnOpen() {
+    if (latest) applyApp();
+    if (ui.layer === 'radar') { radar?.enable(); stale = false; return; }
+    const was = stale; stale = false;
+    if (!frames.length || frame == null && loadingIdx < 0 || (ui.layer !== 'sst' && was && !runs)) { loadLayer(); return; }
+    if (was && ui.layer !== 'sst') { const i = nearestFrame(frames, selT); if (i !== idx || !frame) showIndex(i); }
   }
 
   return {
@@ -589,8 +611,11 @@ export function createOceanMap(section, { onSelectSpot, onTime = () => {}, sourc
     setShown(on) {
       shown = on;
       for (const el of [mapEl, topEl, $('.om-time'), info, insp]) el.classList.toggle('om-off', !on);
-      if (!on) { stopPlay(); openMenu(false); openInfo(false); }
-      if (map) { flow.setActive(on && onScreen && ui.layer !== 'radar' && ui.layer !== 'sst'); if (on) map.invalidateSize(); }
+      if (!on) { stopPlay(); openMenu(false); openInfo(false); radar?.disable(); gen++; loadingIdx = -1; } // gen++: drop in-flight loads
+      if (map) {
+        flow.setActive(on && onScreen && ui.layer !== 'radar' && ui.layer !== 'sst');
+        if (on) { map.invalidateSize(); homeFit(); syncOnOpen(); }
+      }
     },
     get ready() { return !!map; },
     get map() { return map; },

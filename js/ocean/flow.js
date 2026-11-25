@@ -49,6 +49,7 @@ export function createFlow(map, L, { reduced = () => false, isWater = () => true
     return { u, v };
   }
   function rebuild(blend) {
+    const s = map.getSize(); if (s.x !== W || s.y !== H) size(); // may run before 'resize' when the map is revealed
     const g = sampleGrid();
     if (blend && gu && gu.length === g.u.length && motion && !reduced()) { fromU = gu.slice(); fromV = gv.slice(); toU = g.u; toV = g.v; blendStart = performance.now(); }
     else { gu = g.u; gv = g.v; toU = null; }

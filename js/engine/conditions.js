@@ -2,7 +2,7 @@
 // tagged obs / fcst / est), a 15-minute score timeline through day 7 (each step marked
 // with whether it falls inside the PirateCast hours, 1 h before sunrise → 1 h after sunset), the best window and a
 // notification-ready summary. Pure: no fetching.
-import { makeTide } from './tide.js';
+import { makeTide, makeTideCurve } from './tide.js';
 import { daylightRanges, isDaylight } from './sun.js';
 import { skimRanges, isSkimmable } from './skim.js';
 import { scoreSample, bestWindow, buildSummary } from './score.js';
@@ -103,6 +103,7 @@ export function buildConditions(spot, data, now = new Date()) {
   const window = nowScore.score == null ? { state: 'unknown' } : bestWindow(timeline.filter(x => x.t < horizon));
   return {
     spot, now, current, score: nowScore, timeline, window, daylight, skim, hours: skim, tide,
+    tideCurve: makeTideCurve(data.tideSeries, tide), // display only (chart + readings); the score uses `tide`
     range: { from, to }, status: data.status,
     summary: buildSummary(spot, nowScore, window),
   };

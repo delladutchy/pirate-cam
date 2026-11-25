@@ -23,7 +23,11 @@ export function createBase(map, L, coast) {
     canvas.width = W * dpr; canvas.height = H * dpr;
     canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
   }
+  // The map can be built while hidden (0×0) and Leaflet fires moveend before resize when it is
+  // revealed, so every draw re-checks the size instead of trusting event order.
+  function fit() { const s = map.getSize(); if (s.x !== W || s.y !== H) size(); }
   function draw() {
+    fit();
     L.DomUtil.setPosition(canvas, map.containerPointToLayerPoint([0, 0]));
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, W, H);

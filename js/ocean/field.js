@@ -32,6 +32,10 @@ export function createField(map, L, { coast = null } = {}) {
     canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
   }
 
+  // The map can be built while hidden (0×0) and Leaflet fires moveend before resize when it is
+  // revealed, so drawing and the water mask re-check the size instead of trusting event order.
+  function fit() { const s = map.getSize(); if (s.x !== W || s.y !== H) size(); }
+
   function landPath() {
     if (!coast) return null;
     const p = new Path2D();
@@ -51,6 +55,8 @@ export function createField(map, L, { coast = null } = {}) {
   }
 
   function buildMask() {
+    fit();
+    if (!W || !H) { mdata = null; maskKey = ''; return; } // nothing on screen yet: no mask to build
     const k = `${W}x${H}|${map.getCenter().lat.toFixed(5)},${map.getCenter().lng.toFixed(5)}|${map.getZoom()}`;
     if (k === maskKey) return;
     maskKey = k;
@@ -74,6 +80,7 @@ export function createField(map, L, { coast = null } = {}) {
   /** layer: { frame, field: 'height'|…, scale, water: bool } */
   function draw() {
     const t0 = performance.now();
+    fit();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     L.DomUtil.setPosition(canvas, map.containerPointToLayerPoint([0, 0]));

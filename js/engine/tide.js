@@ -32,3 +32,30 @@ export function makeTide(events) {
 
   return { events: ev, at, nextHigh: t => nextOf(t, 'H'), nextLow: t => nextOf(t, 'L'), covers: t => !!bracket(t) };
 }
+
+/** The tide curve as drawn and read out (chart, tide reading, dock). Where NOAA publishes 6-minute
+ *  predictions for the station they are used directly; elsewhere (subordinate stations, which only
+ *  have hi/lo predictions) the curve is the hi/lo interpolation above. Display only: the Pirate
+ *  Score keeps using `makeTide`. The highs and lows listed are always NOAA's hi/lo predictions.
+ *  Returns { source: 'noaa6'|'hilo', start, end, at(t) → { height, rising, rateFtHr } | null, events }. */
+export function makeTideCurve(series, tide) {
+  if (!tide) return null;
+  const ok = series && series.v && series.v.length > 1 && series.step > 0;
+  if (!ok) {
+    const ev = tide.events;
+    if (ev.length < 2) return null;
+    return { source: 'hilo', start: ev[0].t.getTime(), end: ev.at(-1).t.getTime(), events: ev,
+      at(t) { const s = tide.at(t instanceof Date ? t : new Date(t)); return s && { height: s.height, rising: s.rising, rateFtHr: s.rateFtHr }; } };
+  }
+  const { t0, step, v } = series, n = v.length, end = t0 + step * (n - 1);
+  return { source: 'noaa6', start: t0, end, events: tide.events,
+    at(t) {
+      const ms = +t; if (!(ms >= t0 && ms <= end)) return null;
+      const x = (ms - t0) / step, i = Math.min(n - 2, Math.floor(x)), f = x - i;
+      const height = v[i] + (v[i + 1] - v[i]) * f;
+      // slope over ±12 min, so the arrow and rate don't flicker on a flat crest
+      const a = v[Math.max(0, i - 1)], b = v[Math.min(n - 1, i + 2)];
+      const rate = (b - a) / ((Math.min(n - 1, i + 2) - Math.max(0, i - 1)) * step / HOUR);
+      return { height, rising: rate > 0, rateFtHr: rate };
+    } };
+}

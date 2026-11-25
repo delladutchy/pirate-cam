@@ -1,179 +1,177 @@
-// Interactive 24-hour tide graph, synced with PirateCast through the app's ONE
-// shared selected time (this module never stores its own selection).
+// PirateCast tide chart: one continuous multi-day tide curve that slides under a fixed centre
+// marker, synced with the app's ONE shared selected time (this module never owns a selection).
 //
-// - Static layer (curve, night, best window, highs/lows, now pulse) is drawn once
-//   per spot/time-window; only the playhead moves. The window is stable: today's 24 h (from 3 h
-//   ago), or the selected day — it never slides along with a selection, and it holds still while
-//   any forecast graph is being dragged.
-// - Tap/click selects a time. Press-and-drag scrubs continuously (Pointer Events +
-//   pointer capture). On touch, `touch-action: pan-y` leaves vertical swipes to the
-//   browser (page scroll) and gives us horizontal drags.
-// - The playhead dot rides the real tide curve (makeTide interpolation), not a fixed Y.
-// - Keyboard: ← → move 1 h, Shift+← → move 15 min.
-import { short, hour, time } from './format.js';
+// - The whole curve (yesterday → the end of NOAA's predictions, ~9 days) is drawn once per spot
+//   into a wide SVG strip. Changing the time only translates that strip (GPU transform), so there
+//   are no rebuilds, no day pages and no jumps at midnight; the y-scale is fixed for the strip.
+// - The curve is the spot's display tide curve (engine/tide.js makeTideCurve): NOAA 6-minute
+//   predictions where the station publishes them, otherwise NOAA's hi/lo predictions joined the
+//   standard way. Highs and lows (times and heights) are always NOAA's hi/lo predictions.
+// - Drag the chart sideways to move time (finger-locked, no easing; vertical swipes still scroll
+//   the page via `touch-action: pan-y`). Drags elsewhere (PirateCast, dock) move it instantly too;
+//   discrete changes (Weekly Outlook, Now, taps) glide there with easing, unless reduced motion.
+// - Tap the chart to show the selected time, height, rising/falling and the highs and lows;
+//   tap again, or anywhere outside, to hide them. Keyboard: ← → 1 h, Shift 15 min.
+import { short, time } from './format.js';
 
 const HOUR = 3600e3;
-const SPAN = 24 * HOUR;
-const PAD = 8;
+const VIEW = 24 * HOUR;               // visible span
+const TZ = 'America/New_York';
+const hourOf = new Intl.DateTimeFormat('en-US', { timeZone: TZ, hour: 'numeric', hourCycle: 'h23' });
+const dowOf = new Intl.DateTimeFormat('en-US', { timeZone: TZ, weekday: 'short' });
+const dayOf = new Intl.DateTimeFormat('en-US', { timeZone: TZ, weekday: 'short', month: 'short', day: 'numeric' });
+const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+const ease = k => 1 - Math.pow(1 - k, 3);
 
 export function createTideGraph(el, { onPick }) {
-  let geo = null;            // { fromMs, W, H, cond, X, Y, tide, minT, maxT }
-  let drag = null;           // { id, x0, y0, active, type }
-  let lastT = null;
+  // g: { cond, curve, W, H, pxMs, start, end, Y, minT, maxT }
+  let g = null, shownT = 0, targetT = 0, anim = 0, open = false, drag = null, pickRaf = 0, pendingPick = null;
 
-  function windowFor(cond, selT, dayFrom) {
-    const today = cond.now.getTime() - 3 * HOUR;
-    if (dayFrom == null) return today;
-    const t = selT ? selT.getTime() : today;
-    return t >= today && t <= today + SPAN ? today : dayFrom; // a selection still inside today's window keeps it
-  }
-
-  function render(cond, selT, { force = false, instant = false, hold = false, from: dayFrom = null } = {}) {
-    const { tide, now, daylight, window: win } = cond;
-    if (!tide) { el.innerHTML = '<p class="na">Tide data temporarily unavailable</p>'; geo = null; return; }
-    const W = Math.max(300, Math.round(el.clientWidth || 640));
-    // While dragging, the time window is frozen so the graph never jumps under the finger.
-    if (geo && geo.cond === cond && geo.W === W && (drag?.active || (!force && (hold || geo.fromMs === windowFor(cond, selT, dayFrom))))) { place(selT, instant); return; }
-    const fromMs = windowFor(cond, selT, dayFrom);
-    const from = new Date(fromMs), to = new Date(fromMs + SPAN);
-    const H = W < 500 ? 106 : 132, top = 20, bottom = 18; // compact: ~70 px of curve on a phone; the top row holds the playhead label
-    const pts = [];
-    for (let t = fromMs; t <= to.getTime(); t += 10 * 60e3) { const d = new Date(t); if (tide.covers(d)) pts.push([t, tide.at(d).height]); }
-    if (pts.length < 2) { el.innerHTML = '<p class="na">Tide data temporarily unavailable</p>'; geo = null; return; }
-    const hs = pts.map(p => p[1]);
-    const lo = Math.min(...hs), hi = Math.max(...hs), span = Math.max(0.5, hi - lo);
-    const X = t => PAD + (t - fromMs) / SPAN * (W - 2 * PAD);
-    const Y = h => top + (1 - (h - lo) / span) * (H - top - bottom);
-    const base = H - bottom;
-
-    let svg = `<svg class="tidegraph" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="slider" tabindex="0" aria-label="Tide graph — drag or use arrow keys to choose a time" aria-valuetext="">`;
-    let cursor = fromMs;
-    const day = daylight.filter(r => r.sunset > from && r.sunrise < to).sort((a, b) => a.sunrise - b.sunrise);
-    const night = (a, b) => { if (b > a) svg += `<rect x="${X(a)}" y="0" width="${X(b) - X(a)}" height="${base}" class="night"/>`; };
-    for (const r of day) { night(cursor, Math.max(cursor, r.sunrise.getTime())); cursor = Math.max(cursor, r.sunset.getTime()); }
-    night(cursor, to.getTime());
-    if (win && win.start && win.end > from && win.start < to) {
-      const a = X(Math.max(win.start.getTime(), fromMs)), b = X(Math.min(win.end.getTime(), to.getTime()));
-      svg += `<rect x="${a}" y="0" width="${Math.max(2, b - a)}" height="${base}" class="bestband"/>`;
-    }
-    const line = pts.map((p, i) => `${i ? 'L' : 'M'}${X(p[0]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join('');
-    svg += `<path d="${line}L${X(pts.at(-1)[0])},${base}L${X(pts[0][0])},${base}Z" class="area"/><path d="${line}" class="curve"/>`;
-    for (let t = Math.ceil(fromMs / (3 * HOUR)) * 3 * HOUR; t <= to.getTime(); t += 3 * HOUR) {
-      const x = X(t); if (x < 18 || x > W - 18) continue;
-      svg += `<text x="${x}" y="${H - 5}" class="tick" text-anchor="middle">${hour(new Date(t))}</text>`;
-    }
-    for (const e of tide.events.filter(e => e.t >= from && e.t <= to)) {
-      const x = X(e.t.getTime()), y = Y(e.v);
-      const anchor = x < 40 ? 'start' : x > W - 40 ? 'end' : 'middle';
-      // highs labelled just under the crest, lows just above the trough: inside the curve's band,
-      // clear of the playhead label (top) and the hours (bottom)
-      svg += `<circle cx="${x}" cy="${y}" r="2.5" class="hl"/><text x="${x}" y="${e.type === 'H' ? y + 14 : y - 7}" class="hltxt" text-anchor="${anchor}">${e.type} ${e.v.toFixed(1)} · ${short(e.t)}</text>`;
-    }
-    const n = tide.covers(now) ? tide.at(now) : null;
-    if (n && now >= from) {
-      const x = X(now.getTime()), y = Y(n.height);
-      svg += `<circle cx="${x}" cy="${y}" r="5" class="nowring"/><circle cx="${x}" cy="${y}" r="3.5" class="nowdot"/>`;
-    }
-    // hover preview (desktop) and the selected playhead — both moved with CSS transforms
-    svg += `<g class="hoverhead" style="display:none"><line x1="0" x2="0" y1="20" y2="${base}"/><text class="hv-txt" y="${base - 6}" text-anchor="middle"></text></g>`;
-    svg += `<g class="playhead"><line x1="0" x2="0" y1="20" y2="${base}"/><g class="ph-dot"><circle r="6"/></g><text class="ph-txt" y="14" text-anchor="middle"></text></g>`;
-    svg += '</svg>';
-    el.innerHTML = svg;
-    // Selectable range: the visible window ∩ [now, end of the forecast timeline] ∩ tide coverage.
-    const tlEnd = cond.timeline.at(-1).t.getTime();
-    geo = { fromMs, W, H, cond, X, Y, tide, minT: Math.max(fromMs, now.getTime()), maxT: Math.min(fromMs + SPAN, tlEnd, pts.at(-1)[0]) };
+  function render(cond, selT, { force = false, instant = false } = {}) {
+    const curve = cond.tideCurve;
+    if (!curve) { el.innerHTML = '<p class="na">Tide data temporarily unavailable</p>'; g = null; return; }
+    const W = Math.max(280, Math.round(el.clientWidth || 640));
+    if (g && !force && g.cond === cond && g.W === W) { place(selT, instant); return; }
+    build(cond, curve, W);
     place(selT, true);
   }
 
+  function build(cond, curve, W) {
+    const H = W < 500 ? 92 : 108, top = 10, axis = 18, base = H - axis;
+    const pxMs = W / VIEW, start = curve.start, end = curve.end, SW = Math.ceil((end - start) * pxMs);
+    const X = t => (t - start) * pxMs;
+    // fixed scale over the whole dataset: moving through time never rescales the curve
+    const pts = [];
+    const dt = curve.source === 'noaa6' ? 6 * 60e3 : 10 * 60e3;
+    for (let t = start; t <= end; t += dt) { const s = curve.at(t); if (s) pts.push([t, s.height]); }
+    const hs = pts.map(p => p[1]), lo = Math.min(...hs), hi = Math.max(...hs), span = Math.max(0.5, hi - lo);
+    const Y = h => top + (1 - (h - lo) / span) * (base - top - 4);
+    const line = pts.map((p, i) => `${i ? 'L' : 'M'}${X(p[0]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join('');
+    let s = '';
+    // night, subtly
+    let c = start;
+    for (const r of cond.daylight.filter(r => r.sunset > start && r.sunrise < end).sort((a, b) => a.sunrise - b.sunrise)) {
+      const a = Math.max(c, start), b = Math.min(r.sunrise.getTime(), end); if (b > a) s += `<rect x="${X(a).toFixed(1)}" y="0" width="${(X(b) - X(a)).toFixed(1)}" height="${base}" class="tg-night"/>`;
+      c = Math.max(c, r.sunset.getTime());
+    }
+    if (end > c) s += `<rect x="${X(c).toFixed(1)}" y="0" width="${(X(end) - X(c)).toFixed(1)}" height="${base}" class="tg-night"/>`;
+    s += `<path d="${line}L${X(pts.at(-1)[0]).toFixed(1)},${base}L${X(pts[0][0]).toFixed(1)},${base}Z" class="tg-area"/><path d="${line}" class="tg-curve"/>`;
+    // minimal axis: weekday at midnight, 6a · 12p · 6p
+    for (let t = Math.ceil(start / HOUR) * HOUR; t <= end; t += HOUR) {
+      const h = +hourOf.format(t) % 24; if (h % 6) continue;
+      const lbl = h === 0 ? dowOf.format(t) : h === 6 ? '6a' : h === 12 ? '12p' : '6p';
+      if (h === 0) s += `<line x1="${X(t).toFixed(1)}" x2="${X(t).toFixed(1)}" y1="${top}" y2="${base}" class="tg-mid"/>`;
+      s += `<text x="${X(t).toFixed(1)}" y="${H - 5}" class="tg-tick${h === 0 ? ' tg-day' : ''}" text-anchor="middle">${lbl}</text>`;
+    }
+    // highs and lows: only shown while the chart is opened (tap); labelled inside the curve's band
+    // (under a crest, over a trough) so they never clip at the edges
+    s += '<g class="tg-hl">';
+    for (const e of curve.events) {
+      const t = e.t.getTime(); if (t < start || t > end) continue;
+      const y = Y(curve.at(t)?.height ?? e.v), x = X(t);
+      s += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.6"/><text x="${x.toFixed(1)}" y="${(e.type === 'H' ? y + 15 : y - 8).toFixed(1)}" text-anchor="middle">${e.type === 'H' ? 'High' : 'Low'} ${e.v.toFixed(1)} · ${short(e.t)}</text>`;
+    }
+    s += '</g>';
+    el.innerHTML = `<div class="tg-view" style="height:${H}px" role="slider" tabindex="0" aria-label="Tide chart — drag sideways or use the arrow keys to change the time; tap for highs and lows" aria-valuetext="">
+      <svg class="tg-strip" width="${SW}" height="${H}" viewBox="0 0 ${SW} ${H}" aria-hidden="true">${s}</svg>
+      <div class="tg-center" style="height:${base}px" aria-hidden="true"><i class="tg-dot"></i></div>
+      <div class="tg-card" style="height:${axis}px" aria-hidden="true"></div>
+    </div>`;
+    const tlEnd = cond.timeline.at(-1).t.getTime();
+    g = { cond, curve, W, H, base, pxMs, start, end, Y, strip: el.querySelector('.tg-strip'), dot: el.querySelector('.tg-dot'), card: el.querySelector('.tg-card'), view: el.querySelector('.tg-view'),
+      minT: Math.max(start + 1, cond.now.getTime()), maxT: Math.min(end, tlEnd) };
+    el.classList.toggle('tg-open', open);
+    cancelAnimationFrame(anim); anim = 0; shownT = 0;
+  }
+
+  const clamp = t => Math.min(g.maxT, Math.max(g.minT, t));
+
+  /** Move to a time: instantly (drags, first paint, reduced motion) or with easing. */
   function place(selT, instant = false) {
-    if (!geo) return;
-    const svg = el.querySelector('svg'), ph = el.querySelector('.playhead');
-    const t = selT || geo.cond.now;
-    lastT = t;
-    const s = geo.tide.covers(t) ? geo.tide.at(t) : null;
-    if (!s || t.getTime() < geo.fromMs || t.getTime() > geo.fromMs + SPAN) { ph.style.display = 'none'; return; }
-    ph.style.display = '';
-    const x = geo.X(t.getTime()), y = geo.Y(s.height);
-    ph.classList.toggle('instant', instant || !!drag?.active);
-    ph.style.transform = `translateX(${x}px)`;
-    ph.querySelector('.ph-dot').style.transform = `translateY(${y}px)`;
-    const txt = ph.querySelector('.ph-txt');
-    txt.textContent = `${s.height.toFixed(1)} ft ${s.rising ? '↑' : '↓'}${drag?.active ? ' · ' + time(t) : ''}`;
-    txt.setAttribute('text-anchor', x < 60 ? 'start' : x > geo.W - 60 ? 'end' : 'middle');
-    svg.setAttribute('aria-valuetext', `${time(t)}, tide ${s.height.toFixed(1)} feet, ${s.rising ? 'rising' : 'falling'}`);
-    if (instant && !drag?.active) requestAnimationFrame(() => requestAnimationFrame(() => ph.classList.remove('instant')));
+    if (!g) return;
+    const t = clamp((selT || g.cond.now).getTime ? (selT || g.cond.now).getTime() : +selT);
+    targetT = t;
+    if (drag?.active) { if (Math.abs(t - shownT) > 1) paint(t); return; } // the finger owns the chart
+    if (instant || !shownT || Math.abs(t - shownT) < 60e3 || reducedMotion() || document.hidden) { /* a minute or less: nothing to glide */ cancelAnimationFrame(anim); anim = 0; paint(t); return; }
+    const from = shownT, d = Math.abs(t - from), dur = Math.min(650, 260 + 70 * Math.sqrt(d / HOUR)), t0 = performance.now();
+    cancelAnimationFrame(anim);
+    const step = now => {
+      const k = Math.min(1, (now - t0) / dur);
+      paint(from + (targetT - from) * ease(k));
+      anim = k < 1 ? requestAnimationFrame(step) : 0;
+    };
+    anim = requestAnimationFrame(step);
   }
 
-  // ---- pointer → time ----
-  function timeAtClientX(clientX) {
-    const svg = el.querySelector('svg'); const r = svg.getBoundingClientRect();
-    const x = (clientX - r.left) * (geo.W / r.width);
-    const t = geo.fromMs + (x - PAD) / (geo.W - 2 * PAD) * SPAN;
-    return new Date(Math.min(geo.maxT, Math.max(geo.minT, t)));
+  function paint(t) {
+    shownT = t;
+    const x = g.W / 2 - (t - g.start) * g.pxMs;
+    g.strip.style.transform = `translate3d(${x.toFixed(2)}px,0,0)`;
+    const s = g.curve.at(t);
+    if (!s) { g.dot.style.opacity = '0'; return; }
+    g.dot.style.opacity = '';
+    g.dot.style.transform = `translateY(${g.Y(s.height).toFixed(1)}px)`;
+    const d = new Date(t);
+    if (open || drag?.active) g.card.innerHTML = `<b>${dayOf.format(d)} · ${time(d)}</b> <span>${s.height.toFixed(1)} ft ${s.rising ? '↑ Rising' : '↓ Falling'}</span>`;
+    g.view.setAttribute('aria-valuetext', `${dayOf.format(d)} ${time(d)}, tide ${s.height.toFixed(1)} feet, ${s.rising ? 'rising' : 'falling'}`);
   }
 
+  function setOpen(on) {
+    open = on; el.classList.toggle('tg-open', on);
+    if (g) paint(shownT || targetT);
+  }
+
+  // ---- pointer: drag the curve under the marker; tap toggles the details ----
   el.addEventListener('pointerdown', e => {
-    if (!geo || !e.target.closest('svg') || e.button > 0) return;
-    drag = { id: e.pointerId, x0: e.clientX, y0: e.clientY, type: e.pointerType, active: false };
-    if (e.pointerType === 'mouse') { // mouse: scrub immediately
-      drag.active = true;
-      el.querySelector('svg').setPointerCapture(e.pointerId);
-      el.classList.add('scrubbing');
-      onPick(timeAtClientX(e.clientX), { dragging: true });
-    }
+    if (!g || !e.target.closest('.tg-view') || e.button > 0) return;
+    drag = { id: e.pointerId, x0: e.clientX, y0: e.clientY, t0: targetT, active: false, mouse: e.pointerType === 'mouse' };
   });
-
   el.addEventListener('pointermove', e => {
-    if (!geo) return;
-    if (drag && e.pointerId === drag.id) {
-      if (!drag.active) {
-        // touch/pen: only a deliberate horizontal drag scrubs; vertical stays page scroll
-        const dx = Math.abs(e.clientX - drag.x0), dy = Math.abs(e.clientY - drag.y0);
-        if (dx > 8 && dx > dy * 1.2) {
-          drag.active = true;
-          el.querySelector('svg').setPointerCapture(e.pointerId);
-          el.classList.add('scrubbing');
-        } else return;
-      }
-      e.preventDefault();
-      onPick(timeAtClientX(e.clientX), { dragging: true });
-      return;
+    if (!g || !drag || e.pointerId !== drag.id) return;
+    const dx = e.clientX - drag.x0, dy = e.clientY - drag.y0;
+    if (!drag.active) {
+      // a deliberate sideways drag moves time; vertical stays page scroll
+      if (Math.abs(dx) > (drag.mouse ? 3 : 8) && Math.abs(dx) > Math.abs(dy) * 1.2) {
+        drag.active = true; drag.x0 = e.clientX; drag.t0 = shownT || targetT;
+        cancelAnimationFrame(anim); anim = 0;
+        try { g.view.setPointerCapture(e.pointerId); } catch {}
+        el.classList.add('tg-drag');
+      } else return;
     }
-    if (e.pointerType === 'mouse') hover(e.clientX); // subtle preview, desktop only
-  });
-
+    e.preventDefault();
+    const t = clamp(drag.t0 - (e.clientX - drag.x0) / g.pxMs);
+    targetT = t; paint(t);           // the curve follows the finger this frame
+    pendingPick = t;                 // the rest of the page follows once per frame
+    if (!pickRaf) pickRaf = requestAnimationFrame(() => { pickRaf = 0; if (pendingPick != null) { const p = pendingPick; pendingPick = null; onPick(new Date(p), { dragging: true }); } });
+  }, { passive: false });
   const end = e => {
     if (!drag || e.pointerId !== drag.id) return;
-    const wasDrag = drag.active;
-    drag = null;
-    el.classList.remove('scrubbing');
-    if (wasDrag) { suppressClick = true; setTimeout(() => { suppressClick = false; }, 0); onPick(lastT, { dragging: false, end: true }); }
+    const was = drag.active; drag = null;
+    el.classList.remove('tg-drag');
+    if (pickRaf) { cancelAnimationFrame(pickRaf); pickRaf = 0; pendingPick = null; }
+    if (was) { suppress = true; setTimeout(() => { suppress = false; }, 0); onPick(new Date(targetT), { dragging: false, end: true }); }
   };
   el.addEventListener('pointerup', end);
-  el.addEventListener('pointercancel', e => { if (drag && e.pointerId === drag.id) { drag = null; el.classList.remove('scrubbing'); } });
-  el.addEventListener('pointerleave', () => { const h = el.querySelector('.hoverhead'); if (h) h.style.display = 'none'; });
-
-  let suppressClick = false;
-  el.addEventListener('click', e => {
-    if (!geo || suppressClick || !e.target.closest('svg')) return;
-    onPick(timeAtClientX(e.clientX), { dragging: false });
-  });
+  el.addEventListener('pointercancel', e => { if (drag && e.pointerId === drag.id) { const was = drag.active; drag = null; el.classList.remove('tg-drag'); if (was) onPick(new Date(targetT), { dragging: false, end: true }); } });
+  let suppress = false;
+  el.addEventListener('click', e => { if (!g || suppress || !e.target.closest('.tg-view')) return; setOpen(!open); });
+  document.addEventListener('pointerdown', e => { if (open && !el.contains(e.target)) setOpen(false); }, true);
 
   el.addEventListener('keydown', e => {
-    if (!geo || !['ArrowLeft', 'ArrowRight'].includes(e.key)) return;
+    if (!g) return;
+    if (e.key === 'Escape' && open) { setOpen(false); return; }
+    if (!['ArrowLeft', 'ArrowRight'].includes(e.key)) return;
     e.preventDefault();
     const step = (e.shiftKey ? 0.25 : 1) * HOUR * (e.key === 'ArrowRight' ? 1 : -1);
-    const base = (lastT || geo.cond.now).getTime();
-    onPick(new Date(Math.min(geo.maxT, Math.max(geo.cond.now.getTime(), base + step))), { dragging: false });
+    onPick(new Date(clamp(targetT + step)), { dragging: false });
   });
 
-  function hover(clientX) {
-    const h = el.querySelector('.hoverhead'); if (!h) return;
-    const t = timeAtClientX(clientX);
-    h.style.display = '';
-    h.style.transform = `translateX(${geo.X(t.getTime())}px)`;
-    h.querySelector('.hv-txt').textContent = short(t);
-  }
-
-  return { render, place, reset: () => { geo = null; }, get dragging() { return !!drag?.active; } };
+  return {
+    render, place: (t, instant) => place(t, instant),
+    reset: () => { g = null; cancelAnimationFrame(anim); anim = 0; },
+    get dragging() { return !!drag?.active; },
+    get open() { return open; },
+    /** test/debug: what is shown under the marker right now */
+    get shown() { return g ? { t: shownT, target: targetT, x: g.strip.style.transform, animating: !!anim } : null; },
+  };
 }

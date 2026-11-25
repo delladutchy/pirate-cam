@@ -269,7 +269,10 @@ function setTime(t, { from = '', dragging = false, step = 0 } = {}) {
   const dayNow = viewDay(r, t);
   const s = { ...raw, night: raw.skimmable === false };
   const label = timeLabel(t, r);
-  const tideNow = t && r.tide && r.tide.covers(t) ? r.tide.at(t) : s.tide;
+  const tideEng = t && r.tide && r.tide.covers(t) ? r.tide.at(t) : s.tide;
+  // displayed tide = the drawn curve (NOAA 6-min predictions where published); events stay NOAA hi/lo
+  const tc = r.tideCurve?.at(t || r.now);
+  const tideNow = tideEng && tc ? { ...tideEng, height: tc.height, rising: tc.rising, rateFtHr: tc.rateFtHr } : tideEng;
   const shown = { ...s, tide: tideNow };
   const relation = windRelation(r.spot.profile.shoreFacingDeg, s.wind);
   const rec = recommendFor(r, raw, t, r.dayWindows[dayNow.index]);
@@ -278,8 +281,9 @@ function setTime(t, { from = '', dragging = false, step = 0 } = {}) {
   renderTideSummary($('#tideNow'), $('#tideSummary'), r, { t: t || r.now, tide: tideNow }, label);
   renderSel($('#pcSel'), r, shown, { label, mode: state.graph.mode, open: state.wxOpen });
   renderDir($('#pcDir'), r, shown, relation);
-  // the tide chart shows today's 24 h, or the selected day's; during any drag its window holds still
-  tideGraph.render(r, t || r.now, { instant: dragging, hold: dragging, from: dayNow.index ? dayNow.start.getTime() : null });
+  // the tide chart is one continuous multi-day curve under a fixed centre marker: drags follow
+  // instantly, other time changes glide there (no rebuilds, also across midnight)
+  tideGraph.render(r, t || r.now, { instant: dragging });
   // PirateCast + dock: rebuilt only when what they span changes (day, 5-day window, mode, data) —
   // never while a 5-day drag crosses midnight; otherwise only the marker moves
   const day = dayNow, range = graphRange(r, day);
@@ -365,7 +369,7 @@ const timeDock = createTimeDock($('#timedock'), {
   zone: { top: $('#piratecastPanel'), bottom: $('#oceanPanel .om-wrap'), avoid: $('#oceanPanel .om-wrap') }, // never over the map: it has its own controls
   enabled: () => state.view === 'forecast',
   // never over a graph or PirateCast's readouts (the map has its own rule: zone.avoid)
-  graphs: [() => $('#dayGraph svg.daygraph'), () => $('#tideGraph svg'), () => $('#pcSel'), () => $('#piratecastPanel .pc-row')],
+  graphs: [() => $('#dayGraph svg.daygraph'), () => $('#tideGraph .tg-view'), () => $('#pcSel'), () => $('#piratecastPanel .pc-row')],
 });
 
 function updateMap() {
@@ -524,7 +528,7 @@ function renderShop() {
 }
 
 // Test hook, only with ?debug in the URL.
-if (new URLSearchParams(location.search).has('debug')) window.__pv = { state, windMap, oceanMap, setTime, setMapView, prefs, get outlook() { return outlook; } };
+if (new URLSearchParams(location.search).has('debug')) window.__pv = { state, windMap, oceanMap, tideGraph, setTime, setMapView, prefs, get outlook() { return outlook; } };
 
 // ---------- start ----------
 const first = initialRoute(), firstView = VIEWS[location.hash] || 'forecast';
