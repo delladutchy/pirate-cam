@@ -754,3 +754,93 @@ body:not([data-view=forecast]) main>:not(.top):not(.view):not(.help){display:non
 .oceanmap .omhead{margin-bottom:6px}
 .oceanmap .omhead h3{margin:0}
 .dg-line{fill:none;stroke-linejoin:round}
+
+/* ---------- camera-first homepage ---------- */
+main>.spotbar{order:-3}
+/* header: the logo, a plain star (→ Favorites) and plain "Shop" — no outlines */
+.topnav{gap:2px;align-items:center}
+.navlink{display:inline-grid;place-items:center;min-width:44px;height:44px;padding:0 8px;color:var(--muted);text-decoration:none;font-size:14px;font-weight:600;letter-spacing:.2px;border-radius:10px}
+.navlink:hover,.navlink[aria-current]{color:var(--text)}
+.navstar svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linejoin:round}
+.navstar[aria-current] svg{fill:var(--accent);stroke:var(--accent)}
+header.top{margin-bottom:8px}
+/* beach selector: a little more compact; the label at the start says which time the scores are for */
+.spotbar{display:flex;align-items:center;gap:6px;min-width:0}
+.spots{flex:1;min-width:0;gap:6px;padding:2px 0 2px}
+.spot{padding:6px 11px 6px;min-width:80px;min-height:42px;border-radius:9px}
+.spot .sn{font-size:17px}
+.spot .sv{font-size:11.5px;min-height:14px}
+.spots-when{appearance:none;flex:0 0 auto;border:0;background:none;color:var(--muted);font-size:10.5px;font-weight:650;letter-spacing:.5px;text-transform:uppercase;padding:0 2px;min-height:42px;max-width:64px;line-height:1.15;text-align:left;cursor:default;font-variant-numeric:tabular-nums}
+.spots-when.future{color:var(--accent);cursor:pointer;text-transform:none;font-size:11.5px;letter-spacing:0}
+.spots-when.future::after{content:" ↺";color:var(--muted)}
+/* camera right under the beaches */
+.layout{margin-top:8px}
+@media(min-width:1000px){.layout{grid-template-columns:minmax(0,1fr)}.camcol{margin:0 auto;width:100%}}
+.camrow{min-height:34px;margin-top:2px;gap:4px}
+.fav{appearance:none;border:0;background:none;color:var(--muted);width:40px;height:34px;display:inline-grid;place-items:center;cursor:pointer;padding:0;margin-left:auto}
+.fav svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linejoin:round}
+.fav[aria-pressed=true]{color:var(--accent)}
+.fav[aria-pressed=true] svg{fill:var(--accent)}
+.fav+.camonly-btn{margin-left:4px}
+.weekpanel{margin-top:6px;padding-top:10px}
+.wk-head{margin-bottom:4px;align-items:center}
+/* the card that used to sit above the camera now lives in PirateCast as its Details */
+/* (scoped by id: the score code rewrites this element's classes) */
+#piratecastPanel #score{background:none;border:0;border-radius:0;padding:0;margin-top:2px}
+#piratecastPanel #score .sc-top,#piratecastPanel #score .facts{display:none}
+#piratecastPanel #score .why summary{padding:6px 0 4px;font-size:12.5px;color:var(--accent)}
+#piratecastPanel #score>.na{font-size:12.5px;margin:6px 0}
+.pc-when{display:inline-flex;align-items:center;gap:8px}
+.pc-now{appearance:none;border:1px solid var(--line);background:none;color:var(--accent);border-radius:999px;height:26px;padding:0 10px;font-size:10.5px;font-weight:650;letter-spacing:.5px;text-transform:uppercase;cursor:pointer}
+.pc-now[hidden]{display:none}
+
+/* ---------- Favorites: a colourful two-column grid ---------- */
+.favlist{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+@media(max-width:650px){.favlist{grid-template-columns:1fr 1fr;gap:8px}}
+.favtile{position:relative;display:flex;flex-direction:column;border-radius:12px;overflow:hidden;text-decoration:none;color:var(--text);background:#121820;--c:var(--muted)}
+.favtile.band-g{--c:var(--sg)}.favtile.band-a{--c:var(--sa)}.favtile.band-r{--c:var(--sr)}
+.favtile{background:linear-gradient(180deg,color-mix(in srgb,var(--c) 22%,#121820) 0%,#121820 72%)}
+.fv-prev{display:grid;place-items:center;aspect-ratio:16/9;background:color-mix(in srgb,var(--c) 30%,#0b1016);border-bottom:3px solid var(--c)}
+.fv-prev img{width:100%;height:100%;object-fit:cover;display:block}
+.fv-cam{width:28px;height:28px;fill:none;stroke:color-mix(in srgb,var(--c) 70%,#fff);stroke-width:1.6;stroke-linejoin:round;opacity:.8}
+.fv-body{display:flex;flex-direction:column;gap:2px;padding:7px 10px 10px}
+.fv-name{font-family:'Pirata One',Georgia,serif;font-size:20px;line-height:1.1;letter-spacing:.3px}
+.fv-score{display:flex;align-items:baseline;gap:6px;color:var(--c)}
+.fv-num{font-size:30px;font-weight:700;letter-spacing:-1px;line-height:1;font-variant-numeric:tabular-nums;color:var(--c)}
+.fv-num.fv-na{color:var(--muted)}
+.fv-lbl{font-size:10.5px;font-weight:700;letter-spacing:.9px;display:inline-flex;align-items:center;gap:4px;color:var(--c)}
+.fv-best{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;margin-top:2px}
+.fv-best .k{font-size:9.5px;letter-spacing:.8px;text-transform:uppercase;margin-right:2px}
+.fv-best b{font-weight:650;color:var(--text)}
+.fv-best.band-g b{color:var(--sg)}.fv-best.band-a b{color:var(--sa)}.fv-best.band-r b{color:var(--sr)}
+.fv-star{position:absolute;right:4px;top:4px;appearance:none;border:0;background:rgba(10,13,16,.55);border-radius:999px;width:36px;height:36px;display:grid;place-items:center;cursor:pointer;color:var(--accent)}
+.fv-star svg{width:19px;height:19px;fill:var(--accent);stroke:var(--accent);stroke-width:1.5;stroke-linejoin:round}
+.favtile .moon{width:11px;height:11px;fill:currentColor}
+
+/* ---------- camera row: favorite star + expand (Cam only retired) ---------- */
+.camrow .fs-btn{position:static;display:inline-grid;place-items:center;width:40px;height:34px;border:0;background:none;color:var(--muted);border-radius:8px;cursor:pointer;-webkit-backdrop-filter:none;backdrop-filter:none;padding:0}
+.camrow .fs-btn:hover{color:var(--text)}
+.camrow .fs-btn svg{width:19px;height:19px}
+html.no-element-fs #media[data-kind=iframe]+.fs-btn{display:none}
+/* ---------- Pirate View full screen: swipe between cameras ---------- */
+.fs-swipe,.fs-bar{display:none}
+.viewer.is-fs{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;height:100vh;height:100dvh;border:0;border-radius:0;background:#000}
+.viewer:fullscreen{width:100vw;height:100vh;display:flex;align-items:center;justify-content:center;background:#000;border:0;border-radius:0}
+.viewer.is-fs .cam-frame{position:relative;width:min(100vw,calc(100vh * 16 / 9));width:min(100vw,calc(100dvh * 16 / 9))}
+/* the swipe layer covers the picture but leaves the player's bottom control strip free */
+.viewer.is-fs .fs-swipe{display:block;position:absolute;left:0;right:0;top:0;bottom:56px;z-index:30;touch-action:none;cursor:grab}
+.viewer.is-fs .fs-bar{display:flex;position:absolute;z-index:31;top:calc(8px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);align-items:center;gap:4px;background:rgba(8,10,12,.62);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border-radius:999px;padding:3px 4px;transition:opacity .2s}
+.viewer.is-fs.fs-bar-hidden .fs-bar{opacity:0;pointer-events:none}
+.fs-bar button{appearance:none;border:0;background:none;color:#fff;width:36px;height:36px;border-radius:999px;font-size:22px;line-height:1;cursor:pointer;display:grid;place-items:center}
+.fs-bar .fs-exit{font-size:15px;margin-left:4px;background:rgba(255,255,255,.12)}
+.fs-name{font-size:13px;font-weight:600;color:#fff;white-space:nowrap;padding:0 4px;max-width:58vw;overflow:hidden;text-overflow:ellipsis}
+#piratecastPanel #score{margin-top:0}
+#piratecastPanel #score .why summary{padding:4px 0 2px}
+.forecast .pc-tide{margin-top:2px}
+.panel.oceanmap{margin-top:6px;padding-top:6px}
+.oceanmap .omhead{margin-bottom:4px}
+.panel.forecast{padding-top:6px}
+.forecast .pchead{min-height:28px;margin-bottom:2px}
+.pc-now{height:24px}
+.pc-sel{min-height:30px}
+.pc-row{margin-top:0}

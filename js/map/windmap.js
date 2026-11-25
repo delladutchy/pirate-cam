@@ -65,11 +65,7 @@ export function createWindMap(box, { onSelectSpot, loadLeaflet }) {
       markers[m.id].setZIndexOffset(m.id === spotId ? 1000 : 0);
     }
     particles.setField(createSpotField(pts), animate);
-    if (spotId !== lastSpot) {
-      lastSpot = spotId;
-      const sp = spots.find(s => s.id === spotId);
-      if (sp && !map.getBounds().pad(-0.08).contains([sp.lat, sp.lon])) map.setView([sp.lat, sp.lon], Math.max(map.getZoom(), 10), { animate: !reducedMotion() });
-    }
+    lastSpot = spotId; // switching beaches never moves the map (⌖ returns to the beaches)
   }
 
   return {

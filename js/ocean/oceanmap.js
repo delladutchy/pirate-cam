@@ -44,7 +44,7 @@ const LAYERS = {
   radar: { label: 'Radar', scale: SCALES.radar, kind: 'radar' },
   sst: { label: 'Sea temp', scale: SCALES.sst, kind: 'sst', field: 'temp', water: true },
 };
-const ORDER = ['waves', 'period', 'wind', 'radar', 'sst'];
+const ORDER = ['wind', 'waves', 'period', 'radar', 'sst'];
 
 const SVG = (d, extra = '') => `<svg viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"${extra}>${d}</svg>`;
 const ICONS = {
@@ -92,7 +92,7 @@ export function createOceanMap(section, { onSelectSpot, onTime = () => {}, sourc
   const creditsEl = section.querySelector('.om-credits');
   const saved = prefs.ocean;
   const ui = {
-    layer: LAYERS[saved.layer] ? saved.layer : 'waves',
+    layer: LAYERS[saved.layer] ? saved.layer : 'wind', // Wind first; a layer the user picked is kept
     theme: saved.theme === 'light' ? 'light' : 'dark',
     base: saved.baseSet && saved.base === 'map' ? 'map' : 'sat', // satellite unless the user chose Map
     baseSet: !!saved.baseSet,
@@ -554,7 +554,7 @@ export function createOceanMap(section, { onSelectSpot, onTime = () => {}, sourc
       icons[m.id] = html;
       markers[m.id].setZIndexOffset(m.id === spotId ? 1000 : 0);
     }
-    if (spotId !== lastSpot) { lastSpot = spotId; recenter(false); }
+    lastSpot = spotId; // switching beaches never moves the map: position and zoom are the user's (⌖ recentres)
   }
   function recenter(force) {
     if (!map || !latest) { map?.fitBounds(HOME); return; }

@@ -26,42 +26,38 @@
   <header class="top">
     <h1><a href="#" class="home" id="homeLink" aria-label="Pirate View — forecast">Pirate View</a></h1>
     <nav class="topnav" aria-label="Pirate View">
-      <a href="#favorites" class="navbtn" id="favNav"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.6l2.5 5.3 5.8.7-4.3 4 1.1 5.8L12 16.6l-5.1 2.8 1.1-5.8-4.3-4 5.8-.7z"/></svg><span>Favorites</span><b class="navcount" id="favCount" hidden></b></a>
-      <a href="#shop" class="navbtn" id="shopNav"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1 12H6zM9 8V6.5a3 3 0 016 0V8"/></svg><span>Shop</span></a>
+      <a href="#favorites" class="navlink navstar" id="favNav" aria-label="Favorites" title="Favorites"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.6l2.5 5.3 5.8.7-4.3 4 1.1 5.8L12 16.6l-5.1 2.8 1.1-5.8-4.3-4 5.8-.7z"/></svg></a>
+      <a href="#shop" class="navlink" id="shopNav">Shop</a>
     </nav>
   </header>
 
-  <nav id="spots" class="spots" aria-label="Skim spots"></nav>
-  <div id="bestNow" class="bestnow" hidden></div>
+  <div class="spotbar"><button type="button" id="spotsWhen" class="spots-when" aria-live="polite">Now</button><nav id="spots" class="spots" aria-label="Beaches"></nav></div>
 
   <div class="layout">
     <section class="camcol">
       <div class="viewer">
         <div class="cam-frame">
           <div id="media"></div>
-          <button type="button" class="fs-btn" id="fsBtn" aria-label="Full screen" title="Full screen"></button>
+          <div class="fs-swipe" aria-hidden="true"></div>
+          <div class="fs-bar"><button type="button" class="fs-prev" aria-label="Previous camera">‹</button><span class="fs-name"></span><button type="button" class="fs-next" aria-label="Next camera">›</button><button type="button" class="fs-exit" aria-label="Exit full screen">✕</button></div>
         </div>
       </div>
       <div class="camrow">
         <div class="angles" id="angles"></div>
-        <button type="button" id="camOnlyBtn" class="camonly-btn" aria-pressed="false" title="Hide the forecast and keep the camera running"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10.5l5-3v9l-5-3z"/></svg>Cam only</button>
+        <button type="button" id="favBtn" class="fav" aria-pressed="false" aria-label="Add this beach to Favorites"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.6l2.5 5.3 5.8.7-4.3 4 1.1 5.8L12 16.6l-5.1 2.8 1.1-5.8-4.3-4 5.8-.7z"/></svg></button>
+        <button type="button" id="fsBtn" class="fs-btn" aria-label="Full screen" title="Full screen"></button>
       </div>
-    </section>
-
-    <section class="rail">
-      <div class="spothead"><h2 id="spotName"></h2><button id="favBtn" class="fav" aria-pressed="false">☆ Favorite</button></div>
-      <div id="score" class="score" aria-live="polite"><p class="na loading">Loading conditions…</p></div>
     </section>
   </div>
 
-  <section class="panel weekpanel" id="weekPanel" aria-label="Weekly skim outlook — best rated spot and time each day">
-    <div class="wk-head"><h3>Skim outlook</h3><div class="wk-mode" role="group" aria-label="Outlook for"><button type="button" data-wday="all" aria-pressed="true">All spots</button><button type="button" data-wday="spot" aria-pressed="false">This spot</button></div><div class="wk-top"></div></div>
+  <section class="panel weekpanel" id="weekPanel" aria-label="Weekly Outlook — the selected beach's best daylight skim time each day">
+    <div class="wk-head"><h3>Weekly Outlook</h3><div class="wk-top"></div></div>
     <div class="wk-row"></div>
-    <p class="wk-key" hidden><span class="wk-lowsw">5.0</span> less certain</p>
+    <p class="wk-key" hidden></p>
   </section>
 
   <section class="panel forecast" id="piratecastPanel" aria-label="PirateCast forecast">
-    <div class="pchead"><h3>PirateCast</h3><span id="dayLabel" class="daylabel"></span></div>
+    <div class="pchead"><h3>PirateCast</h3><span class="pc-when"><span id="dayLabel" class="daylabel"></span><button type="button" id="pcNow" class="pc-now" hidden>Now</button></span></div>
     <div class="pc-ctl">
       <div class="seg" role="group" aria-label="Graph"><button type="button" data-pc="mode:score" aria-pressed="true">PirateCast</button><button type="button" data-pc="mode:waves" aria-pressed="false">Waves</button></div>
       <div class="seg" role="group" aria-label="Range"><button type="button" data-pc="range:day" aria-pressed="true">Day</button><button type="button" data-pc="range:5d" aria-pressed="false">5 Days</button></div>
@@ -80,6 +76,7 @@
       <div id="tideSummary" class="tidesum" hidden></div>
       <div id="tideGraph" class="tidegraph-wrap"></div>
     </div>
+    <div id="score" class="score pc-details" aria-live="polite"><p class="na loading">Loading conditions…</p></div>
   </section>
 
   <section class="panel oceanmap" id="oceanPanel" aria-label="Ocean map">
@@ -111,5 +108,4 @@
 </main>
 
 <div id="timedock" class="timedock" role="group" aria-label="Forecast time"></div>
-<div class="camonly-bar"><span id="camOnlyName"></span><button id="exitCamOnly" class="pill">Exit cam only</button></div>
 </body></html>

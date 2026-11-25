@@ -81,33 +81,61 @@ export async function renderMedia(media, c) {
 }
 
 // ---------- full screen ----------
-// Every camera player has its own full-screen control, and we use it wherever it works:
-//  - YouTube: its own button (works everywhere, including iPhone);
-//  - DelDOT HLS <video>: the browser's video controls (iPhone opens Apple's video player);
-//  - Angelcam: its own button, which uses the Fullscreen API — fine on desktop, Android and iPad.
-// iPhone Safari has no Fullscreen API for page elements, so there Angelcam's button can only fill
-// its own small frame. Only in that case we show our button, placed exactly over Angelcam's (one
-// icon, never two): it makes the camera fill the window (rotate to landscape for the largest
-// picture). Exit with the same button or Escape. Provider players are never altered.
+// Pirate View's own full screen (the expand icon under the camera): the camera fills the screen
+// — the browser's Fullscreen API where it exists (desktop, Android, iPad), the whole window on
+// iPhone (no Fullscreen API for page elements there; rotate for the largest picture). Inside it,
+// swipe left / right (or ‹ ›, or the arrow keys) to move to the next or previous camera; a slim
+// bar shows the beach. The bottom strip is left to the player, so its own controls still work.
+// Providers' own players and full-screen buttons are untouched (their full screen can't see our
+// swipes). Exit with ✕, the expand icon or Escape.
 const EXPAND = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>';
 const COLLAPSE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>';
 
-export function createFullscreen(viewer, button) {
+export function createFullscreen(viewer, button, { onSwipe = () => {} } = {}) {
   const doc = document;
   const elementFs = !!(viewer.requestFullscreen || viewer.webkitRequestFullscreen) && !!(doc.fullscreenEnabled || doc.webkitFullscreenEnabled);
-  doc.documentElement.classList.toggle('no-element-fs', !elementFs); // CSS shows the button only then
-  const isActive = () => viewer.classList.contains('pseudo-fs');
+  const fsEl = () => doc.fullscreenElement || doc.webkitFullscreenElement;
+  const isActive = () => viewer.classList.contains('is-fs');
 
-  function set(on) {
-    viewer.classList.toggle('pseudo-fs', on);
-    doc.documentElement.classList.toggle('pseudo-fs-on', on);
+  function mark(on) {
+    viewer.classList.toggle('is-fs', on);
+    viewer.classList.toggle('pseudo-fs', on && !(fsEl() === viewer));
+    doc.documentElement.classList.toggle('pseudo-fs-on', on && !(fsEl() === viewer));
     button.innerHTML = on ? COLLAPSE : EXPAND;
     button.setAttribute('aria-label', on ? 'Exit full screen' : 'Full screen');
-    button.title = on ? 'Exit full screen' : 'Full screen';
+    button.title = button.getAttribute('aria-label');
   }
+  async function set(on) {
+    if (on) {
+      if (elementFs) { try { await (viewer.requestFullscreen ? viewer.requestFullscreen() : viewer.webkitRequestFullscreen()); } catch { /* refused: fill the window instead */ } }
+      mark(true);
+    } else {
+      if (fsEl() === viewer) { try { await (doc.exitFullscreen ? doc.exitFullscreen() : doc.webkitExitFullscreen()); } catch { /* already out */ } }
+      mark(false);
+    }
+  }
+  const onFsChange = () => { if (isActive() && fsEl() !== viewer && !viewer.classList.contains('pseudo-fs')) mark(false); };
+  doc.addEventListener('fullscreenchange', onFsChange); doc.addEventListener('webkitfullscreenchange', onFsChange);
   button.addEventListener('click', () => set(!isActive()));
-  // Escape leaves the full-window view (and nothing else reacts to that Escape, e.g. Cam only)
-  doc.addEventListener('keydown', e => { if (e.key === 'Escape' && isActive()) { set(false); e.stopImmediatePropagation(); } });
-  set(false);
-  return { active: isActive, exit: () => set(false) };
+  viewer.querySelector('.fs-exit')?.addEventListener('click', () => set(false));
+  viewer.querySelector('.fs-prev')?.addEventListener('click', () => onSwipe(-1));
+  viewer.querySelector('.fs-next')?.addEventListener('click', () => onSwipe(1));
+  doc.addEventListener('keydown', e => {
+    if (!isActive()) return;
+    if (e.key === 'Escape') { set(false); e.stopImmediatePropagation(); }
+    else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { e.preventDefault(); onSwipe(e.key === 'ArrowRight' ? 1 : -1); }
+  });
+  // swipe: a deliberate sideways stroke on the picture (not the player's bottom control strip)
+  const layer = viewer.querySelector('.fs-swipe');
+  let start = null;
+  layer?.addEventListener('pointerdown', e => { start = { x: e.clientX, y: e.clientY, t: performance.now(), id: e.pointerId }; layer.setPointerCapture?.(e.pointerId); });
+  layer?.addEventListener('pointerup', e => {
+    if (!start || e.pointerId !== start.id) return;
+    const dx = e.clientX - start.x, dy = e.clientY - start.y, dt = performance.now() - start.t; start = null;
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5 && dt < 900) onSwipe(dx < 0 ? 1 : -1); // finger moves left → next
+    else if (Math.abs(dx) < 10 && Math.abs(dy) < 10) viewer.classList.toggle('fs-bar-hidden'); // a tap shows / hides the bar
+  });
+  layer?.addEventListener('pointercancel', () => { start = null; });
+  mark(false);
+  return { active: isActive, exit: () => set(false), enter: () => set(true) };
 }

@@ -9,7 +9,7 @@ import { renderMedia, createFullscreen } from './ui/camera.js';
 import { createTideGraph } from './ui/tidegraph.js';
 import { mountScore, updateScore, renderTideSummary, renderDetails, timeLabel } from './ui/conditions.js';
 import { sampleAt } from './map/model.js';
-import { createDayGraph } from './ui/daygraph.js';
+import { createDayGraph, band } from './ui/daygraph.js';
 import { createTimeDock } from './ui/timedock.js';
 import { forecastDays } from './engine/days.js';
 import { windRelation } from './engine/score.js';
@@ -38,7 +38,7 @@ const REFRESH_MS = 10 * 60e3;
 // selT: the selected forecast time (Date), or null for "now". explicitNow: the user asked for
 // "Now" (the Now buttons) — otherwise, once today's forecast hours are over, the page opens on
 // the next day's best time so PirateCast, the dock and the score card all show the same day.
-const state = { wxOpen: false, spotId: null, cam: null, results: {}, selT: null, explicitNow: false, view: 'forecast', weekMode: 'all',
+const state = { wxOpen: false, spotId: null, cam: null, results: {}, selT: null, explicitNow: false, view: 'forecast', weekMode: 'spot',
   graph: { mode: prefs.pirateCast.mode === 'waves' ? 'waves' : 'score', range: prefs.pirateCast.range === '5d' ? '5d' : 'day' }, r5: 0 }; // results[spotId] = conditions | 'error'
 
 // ---------- routing ----------
@@ -110,7 +110,8 @@ function showCamera() {
 function showCaption() {
   const spot = spotById(state.spotId), c = state.cam && camBySlug[state.cam];
   if (!c) return;
-  $('#camOnlyName').textContent = c.name;
+  const angle = c.name.replace(/^(Bethany|Inlet) /, ''); // "Dewey Beach" / "Bethany · Ocean" / "Southside · Overview"
+  $('.viewer .fs-name').textContent = c.name === spot.fullName || !spot.cams.includes(state.cam) ? c.name : `${spot.name} · ${angle}`;
 }
 
 function renderAngles() {
@@ -125,28 +126,36 @@ function renderAngles() {
 }
 $('#angles').addEventListener('click', e => { const b = e.target.closest('[data-cam]'); if (b) select(state.spotId, b.dataset.cam); });
 
-// ---------- spot nav = overview ----------
+// ---------- beach selector: every beach's score at the ONE selected time ----------
+// Now → current scores; a forecast time → each beach's score at that time. The small label at the
+// start of the row says which ("Now" / "Wed 10:15 AM"); tapping it returns to Now.
+function chipHTML(s) {
+  const r = state.results[s.id];
+  let val = `<span class="sv muted">${r === undefined ? '' : '–'}</span>`;
+  if (r && r !== 'error' && r.score.reason !== 'not-configured') {
+    const x = sampleAt(r.timeline, state.selT), nt = x.skimmable === false; // night: the score, muted, with a moon
+    if (x.score != null) val = `<span class="sv tone-${x.tone}${nt ? ' night' : ''}">${nt ? MOON : '<i></i>'}${x.score.toFixed(1)}</span>`;
+  }
+  return val;
+}
 function renderSpotNav() {
-  $('#spots').innerHTML = spots.map(s => {
-    const r = state.results[s.id];
-    const sc = r && r !== 'error' ? r.score : null;
-    const nt = sc && r.timeline[0].skimmable === false; // night: the score, muted, with a moon
-    const val = sc && sc.score != null ? `<span class="sv tone-${sc.tone}${nt ? ' night' : ''}">${nt ? MOON : '<i></i>'}${sc.score.toFixed(1)}</span>` : `<span class="sv muted">${r === undefined ? '' : '–'}</span>`;
-    return `<button class="spot ${s.id === state.spotId ? 'active' : ''}" data-spot="${s.id}" aria-label="${esc(s.fullName)}"><span class="sn">${esc(s.name)}</span>${val}</button>`;
-  }).join('');
-  // "Best right now" recommends a session, so it keeps to daylight
-  const scored = spots.map(s => state.results[s.id]).filter(r => r && r !== 'error' && r.score.score != null && r.timeline[0].skimmable !== false && r.timeline[0].daylight !== false);
-  const allIn = spots.every(s => state.results[s.id] !== undefined);
-  const best = scored.sort((a, b) => b.score.score - a.score.score)[0];
-  const el = $('#bestNow');
-  if (allIn && best) {
-    el.innerHTML = `<span class="k">Best right now</span> <button data-spot="${best.spot.id}">${esc(best.spot.fullName)} <b>${best.score.score.toFixed(1)}</b> ${best.score.label}</button>`;
-    el.hidden = false;
-  } else el.hidden = true;
+  $('#spots').innerHTML = spots.map(s => `<button class="spot ${s.id === state.spotId ? 'active' : ''}" data-spot="${s.id}" aria-label="${esc(s.fullName)}"><span class="sn">${esc(s.name)}</span>${chipHTML(s)}</button>`).join('');
+  syncChips();
   renderWeek();
   if (state.view === 'favorites') renderFavorites();
 }
-for (const sel of ['#spots', '#bestNow']) $(sel).addEventListener('click', e => { const b = e.target.closest('[data-spot]'); if (b) select(b.dataset.spot); });
+/** Refresh the chips' scores and the time label for the selected time (cheap: no rebuild). */
+function syncChips() {
+  for (const b of document.querySelectorAll('#spots .spot')) { const h = chipHTML(spotById(b.dataset.spot)), v = b.querySelector('.sv'); if (v && v.outerHTML !== h) v.outerHTML = h; }
+  const r = current(), w = $('#spotsWhen');
+  const txt = state.selT && r ? timeLabel(state.selT, r) : 'Now';
+  if (w.textContent !== txt) w.textContent = txt;
+  w.classList.toggle('future', !!state.selT);
+  w.disabled = !state.selT;
+  w.setAttribute('aria-label', state.selT ? `Scores for ${txt} — tap for now` : 'Scores now');
+}
+$('#spots').addEventListener('click', e => { const b = e.target.closest('[data-spot]'); if (b) select(b.dataset.spot); });
+$('#spotsWhen').addEventListener('click', () => setTime(null, { from: 'now' }));
 
 // ---------- conditions ----------
 async function ensureLoaded(spotId, force = false) {
@@ -232,6 +241,7 @@ document.querySelector('.pc-ctl').addEventListener('click', e => {
   syncPcControls(); lastDayKey = ''; setTime(state.selT, { from: 'view' });
 });
 // the hourly weather row + legend open from the selected-conditions line (collapsed by default)
+$('#pcNow').addEventListener('click', () => setTime(null, { from: 'now' }));
 $('#pcSel').addEventListener('click', e => {
   const b = e.target.closest('.ps-wx'); if (!b) return;
   state.wxOpen = !state.wxOpen; syncPcControls(); b.setAttribute('aria-expanded', state.wxOpen);
@@ -277,6 +287,8 @@ function setTime(t, { from = '', dragging = false, step = 0 } = {}) {
   if (key !== lastDayKey) { lastDayKey = key; dayGraph.render(r, day, t, range, { mode: state.graph.mode, days: dayInfo(r) }); timeDock.render(r, day, t, range); }
   else { dayGraph.place(t, dragging, day); timeDock.place(t, dragging, day); }
   $('#dayLabel').textContent = `${day.long} · ${day.sub}`;
+  syncChips();
+  $('#pcNow').hidden = !t;
   if (!dragging) { updateMap(); markWeek(); }
   else scheduleMap();
 }
@@ -301,12 +313,13 @@ function dockView(r, s, t, relation) {
 
 // ---------- weekly skim outlook ----------
 const week = createWeek($('#weekPanel'), { onPick: pickWeekDay });
-let outlook = null;
+let outlook = null, regional = null;
 function renderWeek() {
   const pending = spots.some(s => state.results[s.id] === undefined);
   const r = current();
   outlook = state.weekMode === 'spot' ? (r ? spotOutlook(r) : null) : weekOutlook(state.results, spots);
-  week.render(outlook, { pending: state.weekMode === 'spot' ? !r : pending, sel: weekSel(), mode: state.weekMode, spot: spotById(state.spotId) });
+  regional = pending ? null : weekOutlook(state.results, spots); // "Best this week" across all beaches
+  week.render(outlook, { pending: state.weekMode === 'spot' ? !r : pending, sel: weekSel(), mode: state.weekMode, spot: spotById(state.spotId), regional: regional?.top || null });
 }
 function weekSel() {
   const r = current();
@@ -320,6 +333,11 @@ function markWeek() { // highlight the day being looked at, without rebuilding t
  *  different spot shows that spot's live camera). This spot: only the date and time change. */
 function pickWeekDay(i) {
   if (i === 'all' || i === 'spot') { state.weekMode = i; return renderWeek(); }
+  if (i === 'top') { // the regional best: that beach and its best time
+    const t = regional?.top; if (!t) return;
+    if (t.spot.id === state.spotId) return setTime(t.w.bestT, { from: 'week' });
+    state.selT = t.w.bestT; state.explicitNow = false; return select(t.spot.id);
+  }
   const b = outlook?.days[i]?.best; if (!b) return;
   if (state.weekMode === 'spot' || b.spot.id === state.spotId) return setTime(b.w.bestT, { from: 'week' });
   state.selT = b.w.bestT; // renderConditions() syncs everything to it after the switch
@@ -337,7 +355,7 @@ function setMapView(v) {
   windMap.setShown(v === 'wind');
   $('#oceanPanel .om-credits:not(.wm-credits)').hidden = v !== 'ocean';
   $('#oceanPanel .wm-credits').hidden = v !== 'wind';
-  $('#oceanPanel').dataset.map = v;
+  $('#oceanPanel').dataset.mapview = v;
 }
 document.querySelector('.mapsel').addEventListener('click', e => { const b = e.target.closest('[data-map]'); if (b) setMapView(b.dataset.map); });
 const dayGraph = createDayGraph($('#dayGraph'), { onPick: (t, o = {}) => setTime(t, { from: 'graph', dragging: !!o.dragging, step: o.step || 0 }) });
@@ -368,7 +386,6 @@ function renderConditions(spotSwitch = false) {
   const r = state.results[state.spotId];
   const spot = spotById(state.spotId);
   document.body.dataset.state = r === undefined ? 'loading' : r === 'error' ? 'error' : 'ready';
-  $('#spotName').textContent = spot.fullName;
   syncFavorite();
   if (r === undefined || r === 'error') {
     $('#score').className = 'score';
@@ -394,7 +411,7 @@ function renderConditions(spotSwitch = false) {
   const wm = r.current.waveModelInfo;
   const late = wm && (wm.fallback || wm.stale) ? ` Nearshore waves: ${wm.fallback ? 'previous NWPS run' : 'NWPS run is late'}.` : '';
   $('#score .src').textContent = (missing.length ? `Temporarily unavailable: ${missing.join(', ')}.` : '') + late;
-  if (spotSwitch) fadeIn($('.rail'), $('#piratecastPanel'), $('.tidepanel'));
+  if (spotSwitch) fadeIn($('#piratecastPanel'));
   timeDock.refresh(); // layout changed (panels shown): re-check whether the dock belongs on screen
 }
 
@@ -411,18 +428,24 @@ window.addEventListener('resize', () => {
 });
 
 
-// ---------- cam only ----------
-function setCamOnly(on) {
-  if (on && state.view !== 'forecast') location.hash = '#' + state.spotId;
-  document.body.classList.toggle('cam-only', on);
-  timeDock.refresh();
-  prefs.camOnly = on;
-  $('#camOnlyBtn').setAttribute('aria-pressed', on);
+// ---------- full screen: swipe between cameras ----------
+// Every camera once, in beach order (Dewey → Bethany's angles → the Inlet → Ocean City), each with
+// the beach that owns it. A swipe in full screen moves along this list and selects that beach.
+const CAM_ORDER = (() => {
+  const seen = new Set(), list = [];
+  for (const sp of spots) for (const slug of sp.cams) if (!seen.has(slug) && camBySlug[slug]) {
+    seen.add(slug);
+    const owner = spots.find(o => o.cams[0] === slug) || sp;
+    list.push({ spotId: owner.id, cam: slug });
+  }
+  return list;
+})();
+function swipeCam(dir) {
+  const i = CAM_ORDER.findIndex(x => x.cam === state.cam);
+  const next = CAM_ORDER[((i < 0 ? 0 : i) + dir + CAM_ORDER.length) % CAM_ORDER.length];
+  select(next.spotId, next.cam);
 }
-$('#camOnlyBtn').addEventListener('click', () => setCamOnly(true));
-$('#exitCamOnly').addEventListener('click', () => setCamOnly(false));
-const camFullscreen = createFullscreen($('.viewer'), $('#fsBtn'));
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && document.body.classList.contains('cam-only') && !camFullscreen.active()) setCamOnly(false); });
+const camFullscreen = createFullscreen($('.viewer'), $('#fsBtn'), { onSwipe: swipeCam });
 
 // ---------- favorites (this browser only, no account) ----------
 const isFav = id => prefs.favorites.includes(id);
@@ -433,54 +456,59 @@ function toggleFavorite(id) {
   if (state.view === 'favorites') renderFavorites();
 }
 function syncFavorite() {
-  const on = isFav(state.spotId);
-  const b = $('#favBtn');
+  const on = isFav(state.spotId), b = $('#favBtn'), name = spotById(state.spotId)?.fullName || 'this beach';
   b.setAttribute('aria-pressed', on);
-  b.textContent = on ? '★ Favorite' : '☆ Favorite';
-  const n = prefs.favorites.filter(id => spotById(id)).length;
-  $('#favCount').hidden = !n; $('#favCount').textContent = n || '';
+  b.setAttribute('aria-label', on ? `Remove ${name} from Favorites` : `Add ${name} to Favorites`);
+  b.title = b.getAttribute('aria-label');
 }
 $('#favBtn').addEventListener('click', () => toggleFavorite(state.spotId));
 
 const dayName = (d, now) => { const k = x => x.toLocaleDateString('en-US', { timeZone: 'America/New_York' }); return k(d) === k(now) ? 'Today' : k(d) === k(new Date(now.getTime() + 864e5)) ? 'Tomorrow' : d.toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'short' }); };
-/** One favorite: name, the score now, the upcoming best window, its camera, and remove. */
+/** A provider-supported still for a beach's camera: YouTube's own thumbnail for the Ocean City
+ *  streams. Angelcam and DelDOT offer no still image (their players fetch video even when paused),
+ *  so those tiles show a quiet camera mark instead — no streams run on this page. */
+function camStill(spot) {
+  const slug = (spot.cams[0] || spot.nearbyCams?.[0]), c = slug && camBySlug[slug];
+  const id = c && c.kind === 'youtube' && c.src.match(/embed\/([\w-]{6,})/)?.[1];
+  return id ? `https://i.ytimg.com/vi/${id}/mqdefault.jpg` : null;
+}
+const CAMMARK = '<svg class="fv-cam" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10.5l5-3v9l-5-3z"/></svg>';
+const STAR = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.6l2.5 5.3 5.8.7-4.3 4 1.1 5.8L12 16.6l-5.1 2.8 1.1-5.8-4.3-4 5.8-.7z"/></svg>';
+/** One favorite tile: camera still, name, the score NOW (colour-coded, moon at night), the best
+ *  upcoming daylight time, and a filled star that removes it. The whole tile opens the beach. */
 function favCard(id) {
   const spot = spotById(id); if (!spot) return '';
   const r = state.results[id];
-  let now = '<span class="fv-na">Loading…</span>', best = '';
-  if (r === 'error') now = '<span class="fv-na">Conditions unavailable</span>';
+  let tone = 'none', score = '<span class="fv-num fv-na">…</span>', best = '';
+  if (r === 'error') score = '<span class="fv-num fv-na">–</span>';
   else if (r) {
-    const n = r.timeline[0];
-    if (r.score.reason === 'not-configured') now = '<span class="fv-na">Not rated yet</span>';
-    else if (r.score.score != null) { const nt = n.skimmable === false; now = `<span class="fv-num tone-${r.score.tone}${nt ? ' night' : ''}">${r.score.score.toFixed(1)}</span><span class="fv-lbl tone-${r.score.tone}${nt ? ' night' : ''}">${nt ? MOON : '<i></i>'}${r.score.label}</span>`; }
-    else now = `<span class="fv-num">–</span><span class="fv-lbl">${n.missing?.includes('waves') ? 'No wave forecast' : 'No data'}</span>`;
+    const n = r.timeline[0], nt = n.skimmable === false;
+    if (r.score.reason === 'not-configured') score = '<span class="fv-lbl">Not rated</span>';
+    else if (r.score.score != null) { tone = band(r.score.score); /* the graphs' green / amber / red */ score = `<span class="fv-num">${r.score.score.toFixed(1)}</span><span class="fv-lbl">${nt ? MOON : ''}${r.score.label}</span>`; }
+    else score = '<span class="fv-num fv-na">–</span>';
     const w = r.window, q = windowQuality(w);
-    if (r.score.reason !== 'not-configured' && w && w.start && q) {
-      const kind = q === 'good' || q === 'decent' ? 'Best window' : 'Best available';
-      best = `<p class="fav-best"><span class="k">${kind}</span> ${w.state === 'now' ? 'Now' : dayName(w.bestT, r.now) + ' ' + time(w.bestT)} · <b class="tone-${w.tone}">${w.bestScore.toFixed(1)}</b> ${w.label}</p>`;
-    } else if (r && r.score.reason !== 'not-configured') best = '<p class="fav-best muted">No complete forecast yet</p>';
+    if (r.score.reason !== 'not-configured' && w && w.start && q) best = `<span class="fv-best band-${band(w.bestScore)}"><span class="k">Best</span> ${w.state === 'now' ? 'now' : dayName(w.bestT, r.now) + ' ' + time(w.bestT)} · <b>${w.bestScore.toFixed(1)}</b></span>`;
   }
-  return `<article class="favcard" data-fav="${id}">
-    <div class="fav-top"><h3>${esc(spot.fullName)}</h3><button type="button" class="fav-x" data-remove="${id}" aria-label="Remove ${esc(spot.fullName)} from favorites">✕</button></div>
-    <div class="fav-now"><span class="k">Now</span>${now}</div>
-    ${best}
-    <div class="fav-acts"><a href="#${id}" class="fav-go">Forecast</a><button type="button" class="fav-cam" data-cam-of="${id}">Live cam</button></div>
-  </article>`;
+  const still = camStill(spot);
+  return `<a class="favtile band-${tone}" href="#${id}" data-fav="${id}" aria-label="${esc(spot.fullName)} — open forecast">
+    <span class="fv-prev">${still ? `<img src="${esc(still)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : CAMMARK}</span>
+    <span class="fv-body"><span class="fv-name">${esc(spot.name)}</span><span class="fv-score">${score}</span>${best}</span>
+    <button type="button" class="fv-star" data-remove="${id}" aria-label="Remove ${esc(spot.fullName)} from Favorites" title="Remove from Favorites">${STAR}</button>
+  </a>`;
 }
 function renderFavorites() {
   const ids = prefs.favorites.filter(id => spotById(id));
   const el = $('#favList');
   if (!ids.length) {
-    el.innerHTML = `<div class="empty"><p class="empty-h">No favorite beaches yet</p><p>Tap <b>☆ Favorite</b> next to a beach's name to keep it here with its score, best window and live camera. Favorites are saved on this device only.</p><a href="#" class="pillbtn" data-back>Browse beaches</a></div>`;
+    el.innerHTML = `<div class="empty"><p class="empty-h">No favorites yet</p><p>Tap the ☆ under a beach's camera.</p><a href="#" class="pillbtn" data-back>Back to beaches</a></div>`;
     return;
   }
   el.innerHTML = ids.map(favCard).join('');
+  for (const img of el.querySelectorAll('.fv-prev img')) img.addEventListener('error', () => { img.parentElement.innerHTML = CAMMARK; }, { once: true });
 }
 $('#favList').addEventListener('click', e => {
   const x = e.target.closest('[data-remove]');
-  if (x) return toggleFavorite(x.dataset.remove);
-  const c = e.target.closest('[data-cam-of]');
-  if (c) { location.hash = '#' + c.dataset.camOf; setCamOnly(true); }
+  if (x) { e.preventDefault(); e.stopPropagation(); toggleFavorite(x.dataset.remove); } // the star never opens the beach
 });
 
 // ---------- shop ----------
@@ -505,7 +533,7 @@ select(first.spotId, first.cam);
 setMapView(prefs.mapView);
 syncFavorite();
 showView(firstView);
-if (prefs.camOnly) setCamOnly(true);
+if (prefs.camOnly) prefs.camOnly = false; // "Cam only" was retired: full screen does that job
 
 const idle = window.requestIdleCallback || (fn => setTimeout(fn, 600));
 idle(() => spots.forEach(s => ensureLoaded(s.id)));
