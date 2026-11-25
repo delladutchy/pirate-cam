@@ -23,7 +23,7 @@ export const isComplete = s => s.score != null && (s.coverage ?? 1) >= 0.999;
 export function spotDayBest(cond, day) {
   const ds = cond.timeline.filter(s => s.t >= day.start && s.t < day.end && s.t >= cond.now);
   if (ds.length < 3) return null;
-  if (ds.some(s => (s.skimmable ?? s.daylight) && isComplete(s))) {
+  if (ds.some(s => (s.skimmable ?? s.daylight) && s.daylight !== false && isComplete(s))) {
     const w = dayBestWindow(ds.map(s => (isComplete(s) ? s : { ...s, score: null }))); // complete-only view, same objects for complete times
     return w.state === 'unknown' ? null : { ...w, complete: true };
   }
@@ -36,7 +36,7 @@ export function spotDayBest(cond, day) {
  * Returns { days: [{ day, best: { spot, w, sample } | null }], top: { dayIndex, spot, w, sample } | null, rated, todayOver }
  * or null when no rated spot has loaded. Ties: higher score, then earlier time, then spot order.
  * A day where no rated spot has a complete forecast has best = null (shown "–").
- * todayOver: today's skim window (1 h after sunrise → 1 h before sunset) has ended — the row
+ * todayOver: today's daylight (sunrise → sunset) has ended — the row
  * then leaves Today out instead of showing an empty card.
  */
 export function weekOutlook(results, spots, count = 7) {
@@ -58,5 +58,21 @@ export function weekOutlook(results, spots, count = 7) {
   let top = null;
   out.forEach((d, i) => { if (d.best && better(d.best, top)) top = { dayIndex: i, ...d.best }; });
   const r0 = skimRangeFor(days[0], ref.skim || []);
-  return { days: out, top, rated: rated.map(s => s.id), todayOver: !r0 || r0.end < ref.now };
+  return { days: out, top, rated: rated.map(s => s.id), todayOver: !r0 || r0.sunset < ref.now };
+}
+
+/** THIS SPOT: the same weekly shape for one beach — its own Day's Best each day (complete
+ *  forecasts only, daylight only), and its best day of the week. null when the spot isn't rated. */
+export function spotOutlook(cond, count = 7) {
+  if (!isRated(cond)) return null;
+  const days = forecastDays(cond.timeline, cond.now, count);
+  const better = (a, b) => !b || a.w.bestScore > b.w.bestScore || (a.w.bestScore === b.w.bestScore && a.w.bestT < b.w.bestT);
+  const out = days.map(day => {
+    const w = spotDayBest(cond, day);
+    return { day, best: w && w.complete ? { spot: cond.spot, w, sample: w.peak } : null };
+  });
+  let top = null;
+  out.forEach((d, i) => { if (d.best && better(d.best, top)) top = { dayIndex: i, ...d.best }; });
+  const r0 = skimRangeFor(days[0], cond.skim || []);
+  return { days: out, top, rated: [cond.spot.id], todayOver: !r0 || r0.sunset < cond.now, single: true };
 }

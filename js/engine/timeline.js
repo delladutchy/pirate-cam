@@ -59,7 +59,7 @@ export function confidenceOf(sample, now) {
 
 /** Per-day preview: best skim-hours score (and its tone), or none. */
 export function daySummary(timeline, day) {
-  const s = timeline.filter(x => x.t >= day.start && x.t < day.end && (x.skimmable ?? x.daylight) && x.score != null);
+  const s = timeline.filter(x => x.t >= day.start && x.t < day.end && (x.skimmable ?? x.daylight) && x.daylight !== false && x.score != null);
   if (!s.length) return { best: null, tone: null };
   const b = s.reduce((p, x) => (x.score > p.score ? x : p));
   return { best: b.score, tone: b.tone, bestT: b.t, confidence: b.confidence ?? null };

@@ -119,7 +119,9 @@ export function scoreSample(profile, s) {
   if (Number.isFinite(s.pop) && s.pop >= 70) { score -= 1.5; extra.push(['-', 'Rain likely', 1]); }
   else if (Number.isFinite(s.pop) && s.pop >= 40) { score -= 0.6; extra.push(['-', 'Chance of rain', 0.5]); }
   if (Number.isFinite(s.thunder) && s.thunder >= 25) { score = Math.min(score, 3); extra.push(['-', 'Thunderstorms possible', 2]); }
-  if (s.daylight === false) { score = Math.min(score, 2); extra.push(['-', 'After dark', 3]); }
+  // night outside the PirateCast hours stays capped; inside them (1 h either side of daylight) the
+  // score is the conditions' own
+  if (s.daylight === false && s.skimmable !== true) { score = Math.min(score, 2); extra.push(['-', 'After dark', 3]); }
   score = Math.round(clamp(score, 0, 10) * 10) / 10;
 
   // Rank reasons by how much each factor helped or hurt, keep it short. A "+" detail of a factor
@@ -137,9 +139,9 @@ export function scoreSample(profile, s) {
   return { score, label: L.label, tone: L.tone, reasons: [...pos, ...neg], factors, confidence: wsum / (w.tide + w.wind + w.waves) };
 }
 
-// A sample a window may use: scored and inside the skimmable daylight window (1 h after
-// sunrise → 1 h before sunset; skim.js). Samples built without that flag fall back to daylight.
-const usable = x => (x.skimmable ?? x.daylight) && x.score != null;
+// A sample a window may use: scored, inside the PirateCast hours (skim.js) and in daylight —
+// Best Window / Day's Best never point at the hour before sunrise or after sunset.
+const usable = x => (x.skimmable ?? x.daylight) && x.daylight !== false && x.score != null;
 
 /**
  * samples: [{ t: Date, score, daylight, skimmable }] in time order, first = now.

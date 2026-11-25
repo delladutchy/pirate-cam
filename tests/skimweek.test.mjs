@@ -18,23 +18,23 @@ const up = d => Math.ceil(d / Q) * Q, down = d => Math.floor(d / Q) * Q; // snap
 const NOW = new Date('2026-11-22T23:49:00Z'); // Sun 6:49 PM ET (after dark), like the production capture
 
 // ---------- daylight usable-window calculation ----------
-test('skim window = 1 h after sunrise → 1 h before sunset, per spot and day', () => {
+test('PirateCast hours = exactly 1 h before sunrise → 1 h after sunset, per spot and day', () => {
   const dewey = spotById('dewey'), oc = spotById('oc-downtown');
   const day = new Date('2026-11-23T17:00Z');
   for (const sp of [dewey, oc]) {
     const s = sunTimes(day, sp.lat, sp.lon);
     const [r] = skimRanges([s]);
-    assert.equal(r.start - s.sunrise, H); assert.equal(s.sunset - r.end, H);
+    assert.equal(s.sunrise - r.start, H); assert.equal(r.end - s.sunset, H);
   }
   // independent per spot: OC (further south and west) has its own sun times
   const a = skimRanges([sunTimes(day, dewey.lat, dewey.lon)])[0], b = skimRanges([sunTimes(day, oc.lat, oc.lon)])[0];
   assert.notEqual(a.start.getTime(), b.start.getTime());
-  // the example from the brief: sunrise 6:50, sunset 4:45 → 7:50 → 3:45
+  // sunrise 6:50, sunset 4:45 → 5:50 → 5:45
   const ex = skimRanges([{ sunrise: new Date('2026-11-23T11:50Z'), sunset: new Date('2026-11-23T21:45Z') }])[0];
-  assert.equal(ex.start.toISOString(), '2026-11-23T12:50:00.000Z'); assert.equal(ex.end.toISOString(), '2026-11-23T20:45:00.000Z');
-  assert.ok(isSkimmable(new Date('2026-11-23T12:50Z'), [ex]) && isSkimmable(new Date('2026-11-23T20:45Z'), [ex]));
-  assert.ok(!isSkimmable(new Date('2026-11-23T12:35Z'), [ex]) && !isSkimmable(new Date('2026-11-23T21:00Z'), [ex]));
-  assert.ok(!isSkimmable(new Date('2026-11-23T05:00Z'), [ex]), 'midnight is never a skim time');
+  assert.equal(ex.start.toISOString(), '2026-11-23T10:50:00.000Z'); assert.equal(ex.end.toISOString(), '2026-11-23T22:45:00.000Z');
+  assert.ok(isSkimmable(new Date('2026-11-23T10:50Z'), [ex]) && isSkimmable(new Date('2026-11-23T22:45Z'), [ex]));
+  assert.ok(!isSkimmable(new Date('2026-11-23T10:35Z'), [ex]) && !isSkimmable(new Date('2026-11-23T23:00Z'), [ex]));
+  assert.ok(!isSkimmable(new Date('2026-11-23T05:00Z'), [ex]), 'midnight is never shown');
 });
 
 test('snapToSkim: inside stays, outside moves to the window edge (on the 15-min grid), never before now', () => {
@@ -100,11 +100,30 @@ test("Day's Best only considers usable skim hours (a better first-light score is
 test('darkness is outside the skim window — never called POOR', () => {
   const r = makeCond('dewey');
   const rec = recommendFor(r, r.timeline[0], null, null);
-  assert.equal(rec.kind, 'dark'); assert.equal(rec.head, 'After dark'); assert.doesNotMatch(rec.head + rec.sub, /POOR|Poor conditions/);
-  assert.match(rec.sub, /Next best|Skim hours start/);
+  assert.equal(rec.kind, 'dark'); assert.doesNotMatch(rec.head + rec.sub, /POOR|Poor conditions/);
+  assert.match(rec.head, /Next best|Forecast resumes/);
   const m = mapMarkers([spotById('dewey')], { dewey: r }, null)[0];
   assert.equal(m.score, null); assert.equal(m.outside, true);
   assert.equal(scoreSample(spotById('dewey').profile, { ...r.timeline[0] }).label, r.timeline[0].label, 'scoring itself is unchanged (the cap still exists internally)');
+});
+
+test('the hour before sunrise and after sunset is scored without a darkness cap; Best Window keeps to daylight', () => {
+  const r = makeCond('dewey', { now: new Date('2026-11-23T05:00Z') }); // Mon midnight ET
+  const mon = r.skim.find(h => h.start > r.now);
+  assert.equal(mon.sunrise - mon.start, H); assert.equal(mon.end - mon.sunset, H);
+  const pre = r.timeline.filter(s => s.t >= mon.start && s.t < mon.sunrise), post = r.timeline.filter(s => s.t > mon.sunset && s.t <= mon.end);
+  assert.ok(pre.length >= 3 && post.length >= 3);
+  for (const s of [...pre, ...post]) {
+    assert.equal(s.skimmable, true); assert.equal(s.daylight, false);
+    const free = scoreSample(spotById('dewey').profile, { ...s, daylight: true });
+    assert.equal(s.score, free.score, `${s.t.toISOString()}: same score as in daylight (no cap inside the PirateCast hours)`);
+  }
+  const w = spotDayBest(r, forecastDays(r.timeline, r.now)[0]);
+  assert.ok(w.bestT >= mon.sunrise && w.bestT <= mon.sunset && w.start >= mon.sunrise, "Day's Best stays in daylight");
+  assert.ok(r.window.bestT >= mon.sunrise && r.window.bestT <= mon.sunset, 'Best Window stays in daylight');
+  // night outside the PirateCast hours keeps the existing cap
+  const night = r.timeline.find(s => s.skimmable === false && s.daylight === false && s.score != null);
+  assert.ok(night.score <= 2);
 });
 
 // ---------- weekly outlook ----------

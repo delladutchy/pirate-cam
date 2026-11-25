@@ -1,6 +1,8 @@
 // Score card (follows the selected PirateCast time), tide summary, details.
 import { time, hour, compass, ft, esc, SOURCE_TAG } from './format.js';
 import { setNumbers, cancelNumberTween, rotateTo } from './motion.js';
+import { lightWord } from '../engine/recommend.js';
+import { surfaceQuality, SURFACE } from '../engine/surface.js';
 
 const etDate = d => d.toLocaleDateString('en-US', { timeZone: 'America/New_York' });
 const wk = d => d.toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'short' });
@@ -8,9 +10,6 @@ export const whenLabel = (s, cond) => (s === cond.timeline[0] ? 'Now' : `${etDat
 /** Label for an exact selected time (null = now): "Now", "8 PM", "Sun 8:15 AM". */
 export const timeLabel = (t, cond) => (!t ? 'Now' : `${etDate(t) === etDate(cond.now) ? '' : wk(t) + ' '}${t.getMinutes() ? time(t) : hour(t).replace('a', ' AM').replace('p', ' PM')}`);
 
-// Small compass: N tick + an arrow pointing where the wind BLOWS TO (meteorological from + 180).
-const COMPASS = '<svg class="wcompass" viewBox="0 0 36 36" aria-hidden="true"><circle cx="18" cy="18" r="16" class="wc-ring"/><text x="18" y="7.5" class="wc-n" text-anchor="middle">N</text><g class="wc-arrow"><path d="M18 7l5 9h-3.3v12h-3.4V16H13z"/></g></svg>';
-const REL = { offshore: 'Offshore', 'cross-shore': 'Cross-shore', onshore: 'Onshore', calm: 'Calm' };
 const WAVE_SRC = { obs: 'offshore buoy', model: 'nearshore model', fcst: 'offshore fcst' };
 const utcRun = d => `${String(d.getUTCHours()).padStart(2, '0')}Z ${d.toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' })}`;
 /** "NOAA NWPS run 06Z Nov 24 (previous run)" — the model and run behind a wave value. */
@@ -34,24 +33,49 @@ export function factSentence(s) {
 }
 
 // ---------- score card ----------
+// Compact (about 150 px on a phone): the Pirate Score with its rating and the selected time, one
+// line of advice, then wind · waves · tide · air in one row. Everything else — gusts, wave
+// direction, the model run, confidence and why, the individual factors and the live observations —
+// is one tap away in Details.
+const ARROW = '<svg class="f-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5l6 10h-4v9h-4v-9H6z"/></svg>';
 export function mountScore(el, cond) {
   const notCfg = cond.score.reason === 'not-configured';
   el.className = 'score';
   el.innerHTML = `
-    <div class="kicker"><span class="mode"></span><span class="when">Now</span><button type="button" class="backnow" hidden>Now</button></div>
-    ${notCfg ? `<div class="big muted small">Not rated yet</div><div class="sub">${esc(cond.spot.name)}'s skim profile hasn't been set up yet.</div>`
-    : `<div class="scoreline"><span class="big num" role="img" aria-label="Pirate Score">–</span><span class="lbl"><i></i><span class="lbltxt"></span></span><span class="conf"></span></div>`}
+    <div class="sc-top">
+      ${notCfg ? '<span class="big muted small">Not rated yet</span>' : '<span class="big num" role="img" aria-label="Pirate Score">–</span>'}
+      <span class="sc-meta">${notCfg ? `<span class="lbl muted">No skim profile for ${esc(cond.spot.name)} yet</span>` : '<span class="lbl"><i></i><span class="lbltxt"></span></span>'}<span class="kicker"><span class="mode"></span><span class="when">Now</span></span></span>
+      <button type="button" class="backnow" hidden>Now</button>
+    </div>
     <div class="rec"><b class="rec-h"></b> <span class="rec-s"></span></div>
     <div class="facts">
-      <div class="f fwind"><span class="fk">Wind</span><span class="fv">${COMPASS}<span><span data-f="wind">–</span><span class="fs" data-f="windsub"></span></span></span></div>
-      <div class="f"><span class="fk">Waves</span><span class="fv"><span><span data-f="waves">–</span><span class="fs" data-f="wavesub"></span></span></span></div>
-      <div class="f"><span class="fk">Tide</span><span class="fv"><span><span data-f="tide">–</span><span class="fs" data-f="tidesub"></span></span></span></div>
-      <div class="f"><span class="fk">Temp</span><span class="fv"><span><span data-f="air">–</span><span class="fs" data-f="airsub"></span></span></span></div>
+      <div class="f fwind"><span class="fk">Wind</span><span class="fv">${ARROW}<span data-f="wind">–</span></span></div>
+      <div class="f"><span class="fk">Waves</span><span class="fv"><span data-f="waves">–</span></span></div>
+      <div class="f"><span class="fk">Tide</span><span class="fv"><span data-f="tide">–</span></span></div>
+      <div class="f"><span class="fk">Air</span><span class="fv"><span data-f="air">–</span></span></div>
     </div>
-    ${notCfg ? '' : '<details class="why"><summary>Why this score?</summary><ul></ul><p class="fine">Pirate View estimate from NOAA data.</p></details>'}`;
+    <details class="why"><summary>Details</summary>
+      <dl class="more"></dl>
+      ${notCfg ? '' : '<div class="factors"></div><p class="why-h">Why this score</p><ul></ul>'}
+      <p class="fine conf-x"></p>
+      <p class="why-h">Live observations</p><div class="obs"></div><p class="fine src"></p>
+    </details>`;
 }
 
-const CONF = { high: 'High confidence', medium: 'Medium confidence', low: 'Low confidence' };
+const CONF = { high: 'High confidence', medium: 'Medium confidence', low: 'Lower confidence' };
+const LONG_REL = { offshore: 'offshore', 'cross-shore': 'cross-shore', onshore: 'onshore', calm: 'calm' };
+const FK = { tide: 'Tide', wind: 'Wind', waves: 'Waves' };
+/** Why a score has the confidence it has — the same rules as engine/timeline.js confidenceOf. */
+function confWhy(s, cond) {
+  if (!s.confidence) return '';
+  const ahead = (s.t - cond.now) / 3600e3, why = [];
+  if ((s.coverage ?? 1) < 0.999) why.push('some inputs are missing');
+  if (ahead > 48) why.push('it is more than 2 days ahead');
+  if (s.waves?.stale) why.push('the wave model run is late');
+  if (s.confidence === 'high') return `${CONF.high}: observed wind and buoy waves.`;
+  if (s.confidence === 'medium') return `${CONF.medium}: built from forecasts (NWS wind, NOAA NWPS nearshore waves) within 2 days.`;
+  return `${CONF.low}: ${why.join(', ') || 'forecast inputs are less certain'}. Shown with a dotted underline.`;
+}
 
 export function updateScore(el, cond, s, { onBackToNow, label, isNow = s === cond.timeline[0], relation = null, rec = null } = {}) {
   el.querySelector('.mode').textContent = isNow ? '● Live now' : 'Forecast · ';
@@ -60,46 +84,55 @@ export function updateScore(el, cond, s, { onBackToNow, label, isNow = s === con
   const back = el.querySelector('.backnow');
   back.hidden = isNow;
   back.onclick = onBackToNow;
+  const ul = el.querySelector('.why ul');
   if (s.score != null) {
-    el.className = `score tone-${s.tone}`;
+    el.className = `score tone-${s.tone}${s.confidence === 'low' ? ' low' : ''}`;
     setNumbers([{ el: el.querySelector('.num'), format: v => v.toFixed(1) }], s.score); // instant: same value as the dock
     el.querySelector('.lbltxt').textContent = s.label;
     const rs = s.reasons || [];
-    el.querySelector('.why ul').innerHTML = rs.map(r => `<li class="${r.sign === '+' ? 'pos' : 'neg'}"><b>${r.sign === '+' ? '+' : '−'}</b>${esc(r.text)}</li>`).join('');
-    el.querySelector('.why').style.visibility = '';
+    if (ul) ul.innerHTML = rs.map(r => `<li class="${r.sign === '+' ? 'pos' : 'neg'}"><b>${r.sign === '+' ? '+' : '−'}</b>${esc(r.text)}</li>`).join('');
   } else if (el.querySelector('.num')) {
     cancelNumberTween();
     el.className = `score tone-none${s.outside ? ' outside' : ''}`;
     el.querySelector('.num').textContent = '–'; el.querySelector('.num').dataset.v = '';
-    // outside skim hours is not a bad score — it's no skim forecast at all
-    el.querySelector('.lbltxt').textContent = s.outside ? (s.daylight ? 'Outside skim hours' : 'After dark') : s.missing?.includes('waves') ? 'No wave forecast' : 'Not enough data';
-    el.querySelector('.why ul').innerHTML = '';
-    el.querySelector('.why').style.visibility = 'hidden'; // nothing to explain (the line above says why) — space kept so nothing jumps
+    // night is not a bad score — there is no score at all
+    el.querySelector('.lbltxt').textContent = s.outside ? lightWord(s) : s.missing?.includes('waves') ? 'No wave forecast' : 'Not enough data';
+    if (ul) ul.innerHTML = '';
   }
+  const set = (k, v) => { const e = el.querySelector(`[data-f=${k}]`); if (e.textContent !== v) e.textContent = v; };
+  set('wind', s.wind && Number.isFinite(s.wind.mph) ? (s.wind.mph < 1 ? 'Calm' : `${compass(s.wind.fromDeg)} ${Math.round(s.wind.mph)}`) : '–');
+  set('waves', s.waves && Number.isFinite(s.waves.ft) ? `${s.waves.ft.toFixed(1)}′${s.waves.periodS ? ` ${Math.round(s.waves.periodS)}s` : ''}` : '–');
+  set('tide', s.tide ? `${s.tide.height.toFixed(1)}′ ${s.tide.rising ? '↑' : '↓'}` : '–');
+  set('air', Number.isFinite(s.airF) ? `${Math.round(s.airF)}°` : '–');
+  // Details: the finer print, each fact once
   const f = facts(s);
-  const set = (k, v) => { el.querySelector(`[data-f=${k}]`).textContent = v; };
-  set('wind', f.wind || 'Not available');
-  const gust = s.wind && Number.isFinite(s.wind.gustMph) && s.wind.gustMph > s.wind.mph + 0.5 ? `gusts ${Math.round(s.wind.gustMph)}` : '';
-  set('windsub', [gust, relation ? REL[relation] : ''].filter(Boolean).join(' · '));
-  set('waves', f.waves || 'Not available');
-  // offshore wave data is NOT the beach shorebreak: say where it comes from; the shorebreak line is an estimate
-  const energy = isNow && cond.current.energy ? `${cond.current.energy.label.toLowerCase()} shorebreak (est.)` : '';
-  set('wavesub', [s.waves ? WAVE_SRC[s.waves.source] || 'offshore fcst' : '', s.waves && Number.isFinite(s.waves.fromDeg) ? compass(s.waves.fromDeg) : '', energy].filter(Boolean).join(' · '));
-  const fine = el.querySelector('.why .fine');
-  if (fine) fine.textContent = s.waves?.source === 'model' ? `Pirate View estimate. Waves: ${modelLabel(s.waves)}, ~1 km offshore (a model forecast, not a beach measurement).` : 'Pirate View estimate from NOAA data.';
-  set('tide', f.tide || 'Not available');
-  set('tidesub', s.tide ? (s.tide.rising ? 'Rising · incoming' : 'Falling · outgoing') : '');
-  set('air', Number.isFinite(s.airF) ? `${Math.round(s.airF)}°F` : 'Not available');
-  const water = isNow && cond.current.water ? `water ${Math.round(cond.current.water.f)}°` : '';
-  set('airsub', [water, Number.isFinite(s.pop) && s.pop >= 10 ? `rain ${Math.round(s.pop)}%` : '', s.daylight === false ? 'after dark' : ''].filter(Boolean).join(' · '));
-  const conf = el.querySelector('.conf');
-  if (conf) { conf.textContent = s.confidence ? CONF[s.confidence] : ''; conf.dataset.c = s.confidence || ''; }
+  const gust = s.wind && Number.isFinite(s.wind.gustMph) && s.wind.gustMph > s.wind.mph + 0.5 ? `gusts ${Math.round(s.wind.gustMph)} mph` : '';
+  const water = isNow && cond.current.water ? `water ${Math.round(cond.current.water.f)}°F` : '';
+  const energy = isNow && cond.current.energy ? `${cond.current.energy.label.toLowerCase()} shorebreak (estimate)` : '';
+  const rows = [
+    ['Wind', [f.wind, gust, relation ? LONG_REL[relation] : ''].filter(Boolean).join(' · ')],
+    ['Waves', s.waves ? [f.waves, Number.isFinite(s.waves.fromDeg) ? `from ${compass(s.waves.fromDeg)} (${Math.round(s.waves.fromDeg)}°)` : '', energy].filter(Boolean).join(' · ') : 'Not available'],
+    ['Surface', (() => { const q = surfaceQuality(cond.spot.profile?.shoreFacingDeg ?? null, s.wind, s.waves); return q ? `${SURFACE[q.cls].label} (estimated) — ${q.why}. Not part of Pirate Score.` : ''; })()],
+    ['Model', s.waves ? (s.waves.source === 'model' ? `${modelLabel(s.waves)}, ~1 km offshore (a model forecast, not a beach measurement)` : WAVE_SRC[s.waves.source] || '') : ''],
+    ['Tide', s.tide ? `${s.tide.height.toFixed(1)} ft, ${s.tide.rising ? 'rising (incoming)' : 'falling (outgoing)'}` : 'Not available'],
+    ['Weather', [Number.isFinite(s.airF) ? `${Math.round(s.airF)}°F air` : '', water, Number.isFinite(s.pop) ? `rain ${Math.round(s.pop)}%` : ''].filter(Boolean).join(' · ') || 'Not available'],
+  ].filter(([, v]) => v);
+  el.querySelector('.more').innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('');
+  const fx = el.querySelector('.factors');
+  if (fx) {
+    const w = cond.spot.profile.weights || {};
+    fx.innerHTML = s.score != null && s.factors?.length
+      ? `<p class="why-h">Score factors</p>${s.factors.map(x => `<div class="fx"><span>${FK[x.key] || x.key}<i>${Math.round((w[x.key] ?? 0) * 100)}%</i></span><span class="fx-bar"><b style="width:${Math.round(x.q * 100)}%"></b></span><span class="fx-v">${x.q.toFixed(2)}</span></div>`).join('')}`
+      : '';
+  }
+  el.querySelector('.conf-x').textContent = s.score != null ? confWhy(s, cond) : s.outside ? 'No Pirate Score at night: scores cover 1 h before sunrise to 1 h after sunset. Wind, waves and tide are still forecast.' : '';
   const r = el.querySelector('.rec');
   r.className = `rec rec-${rec?.kind || ''}`;
   r.querySelector('.rec-h').textContent = rec?.head || '';
   r.querySelector('.rec-s').textContent = rec?.sub || '';
   const rel = el.querySelector('.fwind'); rel.dataset.rel = relation || '';
-  const arrow = el.querySelector('.wc-arrow');
+  rel.title = relation ? `${LONG_REL[relation]} wind` : '';
+  const arrow = el.querySelector('.f-arrow');
   const hasDir = s.wind && Number.isFinite(s.wind.fromDeg) && s.wind.mph >= 1;
   arrow.style.visibility = hasDir ? 'visible' : 'hidden';
   if (hasDir) rotateTo(arrow, s.wind.fromDeg + 180); // arrow shows where the wind blows
@@ -137,7 +170,7 @@ export function renderDetails(el, cond) {
   const sr = cond.daylight.find(r => r.sunset > cond.now);
   if (sr) h += row(sr.sunrise > cond.now ? 'Sunrise' : 'Sunset', time(sr.sunrise > cond.now ? sr.sunrise : sr.sunset), '');
   const n0 = cond.timeline[0];
-  if (n0.skimmable === false && cond.score.reason !== 'not-configured') h += row('Pirate Score', c.daylight ? 'Outside skim hours' : 'After dark', cond.skim?.length ? 'Skim forecast: 1 h after sunrise to 1 h before sunset' : '');
+  if (n0.skimmable === false && cond.score.reason !== 'not-configured') h += row('Pirate Score', 'None at night', 'PirateCast covers 1 h before sunrise to 1 h after sunset');
   else if (cond.score.score != null) h += row('Pirate Score', `${cond.score.score.toFixed(1)} ${cond.score.label}`, 'Pirate View', 'est');
   el.innerHTML = h;
 }

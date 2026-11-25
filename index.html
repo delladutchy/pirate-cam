@@ -24,8 +24,11 @@
 <body data-state="loading">
 <main>
   <header class="top">
-    <h1>Pirate View</h1>
-    <button id="camOnlyBtn" class="pill" aria-pressed="false" title="Hide conditions and keep the camera running">Cam only</button>
+    <h1><a href="#" class="home" id="homeLink" aria-label="Pirate View — forecast">Pirate View</a></h1>
+    <nav class="topnav" aria-label="Pirate View">
+      <a href="#favorites" class="navbtn" id="favNav"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.6l2.5 5.3 5.8.7-4.3 4 1.1 5.8L12 16.6l-5.1 2.8 1.1-5.8-4.3-4 5.8-.7z"/></svg><span>Favorites</span><b class="navcount" id="favCount" hidden></b></a>
+      <a href="#shop" class="navbtn" id="shopNav"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1 12H6zM9 8V6.5a3 3 0 016 0V8"/></svg><span>Shop</span></a>
+    </nav>
   </header>
 
   <nav id="spots" class="spots" aria-label="Skim spots"></nav>
@@ -39,7 +42,10 @@
           <button type="button" class="fs-btn" id="fsBtn" aria-label="Full screen" title="Full screen"></button>
         </div>
       </div>
-      <div class="angles" id="angles"></div>
+      <div class="camrow">
+        <div class="angles" id="angles"></div>
+        <button type="button" id="camOnlyBtn" class="camonly-btn" aria-pressed="false" title="Hide the forecast and keep the camera running"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10.5l5-3v9l-5-3z"/></svg>Cam only</button>
+      </div>
     </section>
 
     <section class="rail">
@@ -49,14 +55,21 @@
   </div>
 
   <section class="panel weekpanel" id="weekPanel" aria-label="Weekly skim outlook — best rated spot and time each day">
-    <div class="wk-head"><h3>Skim outlook</h3><div class="wk-top"></div></div>
+    <div class="wk-head"><h3>Skim outlook</h3><div class="wk-mode" role="group" aria-label="Outlook for"><button type="button" data-wday="all" aria-pressed="true">All spots</button><button type="button" data-wday="spot" aria-pressed="false">This spot</button></div><div class="wk-top"></div></div>
     <div class="wk-row"></div>
+    <p class="wk-key" hidden><span class="wk-lowsw">5.0</span> dotted = lower confidence (2+ days out, or a late model run)</p>
   </section>
 
   <section class="panel forecast" id="piratecastPanel" aria-label="PirateCast forecast">
-    <div class="pchead"><h3>PirateCast</h3><span id="dayLabel" class="daylabel"></span></div>
+    <div class="pchead"><h3>PirateCast</h3><span id="dayLabel" class="daylabel"></span>
+      <div class="pc-ctl">
+        <div class="seg" role="group" aria-label="Graph"><button type="button" data-pc="mode:score" aria-pressed="true">Skim Score</button><button type="button" data-pc="mode:waves" aria-pressed="false">Waves</button></div>
+        <div class="seg" role="group" aria-label="Range"><button type="button" data-pc="range:day" aria-pressed="true">Day</button><button type="button" data-pc="range:5d" aria-pressed="false">5 Days</button></div>
+      </div>
+    </div>
     <div id="dayGraph" class="daygraph-wrap"></div>
-    <p class="legend dg-legend"><span class="sw g"></span>7+ <span class="sw a"></span>5–6.9 <span class="sw r"></span>&lt;5 <span class="sw best"></span>Best <span class="lg-note">≈ low confidence</span></p>
+    <p class="legend wv-legend" hidden><span class="sw sf-c"></span>Clean <span class="sw sf-f"></span>Fair <span class="sw sf-x"></span>Choppy <span class="lg-note">Estimated surface quality from wind and wave period — separate from Pirate Score. Height: NOAA NWPS nearshore model.</span></p>
+    <p class="legend dg-legend"><span class="sw g"></span>7+ <span class="sw a"></span>5–6.9 <span class="sw r"></span>&lt;5 <span class="sw best"></span>Best <span class="sw nt"></span>Night <span class="lg-note"><u class="lg-low">5.0</u> lower confidence</span></p>
   </section>
 
   <section class="panel tidepanel" aria-label="Tide">
@@ -74,10 +87,16 @@
     <p class="om-credits"></p>
   </section>
 
-  <section class="panel detailpanel">
-    <h3>Conditions detail</h3>
-    <div id="details" class="details"></div>
-    <p id="sourceNote" class="fine"></p>
+
+  <section class="view" id="favView" aria-labelledby="favTitle" hidden>
+    <div class="viewhead"><a href="#" class="back" data-back>‹ Forecast</a><h2 id="favTitle">Favorites</h2></div>
+    <div id="favList" class="favlist"></div>
+  </section>
+
+  <section class="view" id="shopView" aria-labelledby="shopTitle" hidden>
+    <div class="viewhead"><a href="#" class="back" data-back>‹ Forecast</a><h2 id="shopTitle">Local Surf Shops</h2></div>
+    <div id="shopGrid" class="shopgrid"></div>
+    <p class="fine" id="shopNote"></p>
   </section>
 
   <footer class="help">

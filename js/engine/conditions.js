@@ -1,6 +1,6 @@
 // Turns raw source data into what the screen needs: current conditions (each
 // tagged obs / fcst / est), a 15-minute score timeline through day 7 (each step marked
-// with whether it falls inside the skimmable daylight window), the best window and a
+// with whether it falls inside the PirateCast hours, 1 h before sunrise → 1 h after sunset), the best window and a
 // notification-ready summary. Pure: no fetching.
 import { makeTide } from './tide.js';
 import { daylightRanges, isDaylight } from './sun.js';
@@ -26,7 +26,7 @@ export function buildConditions(spot, data, now = new Date()) {
   // Farther-out hours simply lack inputs (e.g. waves) and are scored or not on what exists.
   const from = new Date(now.getTime() - 6 * HOUR), to = dayStart(now, 7);
   const daylight = daylightRanges(from, to, spot.lat, spot.lon);
-  const skim = skimRanges(daylight); // 1 h after sunrise → 1 h before sunset, this spot's own sun times
+  const skim = skimRanges(daylight); // PirateCast hours: 1 h before sunrise → 1 h after sunset, this spot's own sun times
   const grid = data.grid;
   const g = t => (grid ? grid.at(t) : {});
   const tideAt = t => (tide && tide.covers(t) ? tide.at(t) : null);
@@ -102,7 +102,7 @@ export function buildConditions(spot, data, now = new Date()) {
   const horizon = dayStart(now, 3);
   const window = nowScore.score == null ? { state: 'unknown' } : bestWindow(timeline.filter(x => x.t < horizon));
   return {
-    spot, now, current, score: nowScore, timeline, window, daylight, skim, tide,
+    spot, now, current, score: nowScore, timeline, window, daylight, skim, hours: skim, tide,
     range: { from, to }, status: data.status,
     summary: buildSummary(spot, nowScore, window),
   };

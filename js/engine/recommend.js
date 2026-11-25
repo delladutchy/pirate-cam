@@ -77,14 +77,13 @@ export function recommendFor(cond, s, t, w) {
 const etDay = d => d.toLocaleDateString('en-US', { timeZone: 'America/New_York' });
 const dayWord = (d, now) => (etDay(d) === etDay(now) ? 'today' : etDay(d) === etDay(new Date(now.getTime() + 864e5)) ? 'tomorrow' : d.toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'short' }));
 
-/** Wording for a time outside the skimmable daylight window (before 1 h after sunrise, after
- *  1 h before sunset, or night). Points at the next skim window and, when there is one, the
- *  next best window inside it. */
+/** Wording for a time outside the PirateCast hours (night): no score, and the next best window
+ *  (or when the next PirateCast hours start). */
+export function lightWord() { return 'Night'; }
 export function outsideSkim(cond, s, at) {
-  const head = s.daylight ? 'Outside skim hours' : 'After dark';
   const r = nextSkimRange(at, cond.skim || []);
   const g = cond.window;
-  if (g && g.start && g.bestT > at && windowQuality(g)) return { kind: 'dark', head, sub: `Next best ${dayWord(g.bestT, cond.now)} ${hourWord(g.bestT)} (${tag(g)}).` };
-  if (r) return { kind: 'dark', head, sub: `Skim hours start ${dayWord(r.start, cond.now)} ${time(r.start)}.` };
-  return { kind: 'dark', head, sub: '' };
+  if (g && g.start && g.bestT > at && windowQuality(g)) return { kind: 'dark', head: 'Next best', sub: `${dayWord(g.bestT, cond.now)} ${hourWord(g.bestT)} (${tag(g)}).` };
+  if (r) return { kind: 'dark', head: 'Forecast resumes', sub: `${dayWord(r.start, cond.now)} ${time(r.start)}.` };
+  return { kind: 'dark', head: '', sub: '' };
 }
